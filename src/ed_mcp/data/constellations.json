@@ -1,0 +1,17 @@
+{
+  "teapot": {
+    "name": "Teapot (Sagittarius asterism)",
+    "description": "The Teapot is an asterism in Sagittarius pointing at the galactic core. The 8 main stars used as search centres.",
+    "stars": [
+      {"name": "Kaus Borealis", "edsm": "Kaus Borealis", "x": 90.0625, "y": -24.84375, "z": 47.125},
+      {"name": "Kaus Media", "edsm": "Kaus Media", "x": 84.375, "y": -28.25, "z": 55.125},
+      {"name": "Kaus Australis", "edsm": "Kaus Australis", "x": 78.0, "y": -37.28125, "z": 62.09375},
+      {"name": "Ascella", "edsm": "Ascella", "x": 66.21875, "y": -33.375, "z": 53.0},
+      {"name": "Nunki", "edsm": "Nunki", "x": 62.46875, "y": -20.0, "z": 47.25},
+      {"name": "Phi Sagittarii", "edsm": "Phi Sagittarii", "x": 73.75, "y": -27.0, "z": 60.0},
+      {"name": "Alnasl", "edsm": "Alnasl", "x": 87.5, "y": -28.0, "z": 63.0},
+      {"name": "Terebellum", "edsm": "59 Sagittarii", "x": 70.0, "y": -30.0, "z": 57.0}
+    ],
+    "note": "Coordinates are approximate EDSM galactic coords used to seed sphere searches; EDSM lookups resolve exact positions per star."
+  }
+}

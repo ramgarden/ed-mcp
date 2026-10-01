@@ -1,0 +1,25 @@
+{
+  "ship": "Anaconda",
+  "goal": "Maximum cargo space hauler (shields kept minimal)",
+  "build": [
+    {"slot": "Power Plant", "want": "4A Power Plant (A-rated, smallest that powers the build)"},
+    {"slot": "Thrusters", "want": "5D Thrusters (D-rated = lightest)"},
+    {"slot": "Frame Shift Drive", "want": "6A Frame Shift Drive"},
+    {"slot": "Life Support", "want": "4D Life Support"},
+    {"slot": "Power Distributor", "want": "4D Power Distributor"},
+    {"slot": "Sensors", "want": "4D Sensors (D-rated = lightest)"},
+    {"slot": "Fuel Tank", "want": "5C Fuel Tank (stock)"},
+    {"slot": "Size 7 x2", "want": "7E Cargo Rack x2 (128t total)"},
+    {"slot": "Size 6 x2", "want": "6E Cargo Rack x2 (128t total)"},
+    {"slot": "Size 5 x2", "want": "5E Cargo Rack x2 (64t total)"},
+    {"slot": "Size 4 x2", "want": "4E Cargo Rack x2 (32t total)"},
+    {"slot": "Size 3", "want": "3E Cargo Rack (8t) OR 3A Shield Generator (keeps ~360t + protection)"},
+    {"slot": "Size 2", "want": "2E Cargo Rack (4t)"}
+  ],
+  "expected_capacity_t": 364,
+  "notes": [
+    "E-rated racks hold the most per slot (class == capacity). D-rating only matters for core internals weight.",
+    "Keeping a small (3A / 4A) shield is recommended for a hauler; pure-max removes it for +8-16t.",
+    "Always verify stock/price against live Spansh/EDSM outfitting data; stock rotates."
+  ]
+}
