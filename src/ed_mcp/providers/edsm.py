@@ -104,3 +104,36 @@ def station_outfitting_near(
         if isinstance(data, dict):
             return data.get("stations", [data])
         return data
+
+
+SYS_V1 = "https://www.edsm.net/api-system-v1"
+
+
+def system_bodies(system_name: str) -> dict[str, Any]:
+    """Catalogued bodies for a system (EDSM api-system-v1/bodies).
+
+    This is what *other players* (via EDB/EDDN feeds into EDSM) have
+    catalogued — the community side of 'has anyone scanned this deeply'.
+    Throttled server-side (~700/min); call sparingly.
+    """
+    with httpx.Client(base_url=SYS_V1, timeout=30.0,
+                      headers={"User-Agent": "ed-mcp/0.1"}) as c:
+        r = c.get("/bodies", params={"systemName": system_name})
+        r.raise_for_status()
+        data = r.json()
+    if isinstance(data, list):  # ambiguous/unknown name
+        return {"name": system_name, "bodies": [], "ambiguous": data[:5]}
+    bodies = data.get("bodies", []) if isinstance(data, dict) else []
+    return {"name": (data.get("name") if isinstance(data, dict) else system_name),
+            "id": (data.get("id") if isinstance(data, dict) else None),
+            "count": len(bodies), "bodies": bodies}
+
+
+def system_estimated_value(system_name: str) -> dict[str, Any]:
+    """EDSM estimated scan value for a system (explorer prioritisation)."""
+    with httpx.Client(base_url=SYS_V1, timeout=30.0,
+                      headers={"User-Agent": "ed-mcp/0.1"}) as c:
+        r = c.get("/estimated-value", params={"systemName": system_name})
+        r.raise_for_status()
+        data = r.json()
+    return data if isinstance(data, dict) else {"name": system_name, "value": data}

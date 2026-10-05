@@ -31,16 +31,33 @@ Claude / LLM client  <--MCP (stdio)-->  ed-mcp server
 | `get_current_location` | journal | Current system + coordinates, station, body — always from latest journal |
 | `get_ship_loadout` | journal | Current ship type + modules from latest `Loadout` event |
 | `get_journal_history` | journal | Last N relevant events (`FSDJump`, `Docked`, `Location`, `Outfitting`, …) |
+| `get_cargo_hold` | journal | Cargo manifest + rack capacity + free space (`Cargo.json` + `Loadout`) |
+| `get_station_market` | journal | Live market at docked station (prices/supply/demand from `Market.json`) |
+| `get_station_outfitting` | journal | Outfitting stock at station (`Outfitting.json` + `ModulesInfo.json`) |
+| `get_station_shipyard` | journal | Shipyard stock at station (`Shipyard.json`) |
+| `get_fleet_overview` | journal | All ships + computed cargo each (latest first) |
+| `get_wallet_summary` | journal | Credits + trade/mission reward sums |
+| `get_odyssey_state` | journal | Backpack + ShipLocker + suit loadout (on-foot) |
 | `edsm_sphere_systems` | EDSM | Systems in a radius around coordinates / system name |
 | `edsm_system_info` | EDSM | Population, government, allegiance, bodies for a system (claimable check) |
 | `spansh_find_nearby_stations` | Spansh | Stations near coordinates with pads, distance, services |
 | `spansh_query_systems` | Spansh | Flexible tradedangerous-style systems search near a reference |
+| `spansh_search_stations` | Spansh | Full `/stations/search` passthrough (pads/services/market filters) |
+| `find_commodity` | Spansh | Best buy/sell stations for a commodity near you (supply/demand + prices) |
+| `find_module` | Spansh | Stations selling a module (name or `ed_symbol`) near you |
+| `find_ship` | Spansh | Stations selling a ship near you |
+| `spansh_search_bodies` | Spansh | Exploration search over bodies (Earth-likes, values, landables) |
+| `system_distance` | EDSM | LY distance + jump estimate between two systems |
 | `inara_search_nearest` | Inara | Nearest stations/components via Inara API (needs key) |
+| `inara_website_search` | Inara web | Search links + page check, no key (bot-limited, open in browser) |
 | `eddn_live_sample` | EDDN | Sample N live EDDN messages from the relay (commodity/outfitting/shipyard) |
 | `find_colonisation_candidates` | EDSM+local | Zero-pop, claimable systems near a constellation/centre (Teapot example) |
+| `get_exploration_log` | journal | Per-system survey ledger (COMPLETE/PARTIAL/VISITED) + totals |
+| `system_scan_status` | EDSM+journal | Community bodies catalog + value for one system, plus your log row |
+| `find_search_backlog` | EDSM+journal | Systems near a reference you have not fully scanned (search backlog) |
 | `build_cargo_shopping_list` | journal+Spansh/EDSM | Anaconda max-cargo module list + where to buy near you + prices |
 
-Two MCP **prompts** (`colonisation_survey`, `anaconda_cargo_refit`) encode the worked
+Three MCP **prompts** (`colonisation_survey`, `anaconda_cargo_refit`, `trade_run`, `raxxla_survey`) encode the worked
 examples above so the LLM follows a grounded workflow instead of guessing.
 
 ## Quickstart

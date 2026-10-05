@@ -37,7 +37,7 @@ class Settings:
     eddn_relay: str = "tcp://eddn.edcd.io:9500"
     edsm_base: str = "https://www.edsm.net"
     spansh_base: str = "https://spansh.co.uk/api"
-    inara_base: str = "https://inara.cz/eliteapi/v1"
+    inara_base: str = "https://inara.cz/inapi/v1"
     http_timeout: float = 20.0
 
     @classmethod

@@ -29,7 +29,10 @@ def sample(schema: str | None = None, max_messages: int = 5,
     sock.setsockopt(zmq.LINGER, 0)
     try:
         sock.connect(relay)
-        sock.setsockopt_string(zmq.SUBSCRIBE, schema or "")
+        # NOTE: EDDN publishes raw JSON with no topic prefix, so subscribe to
+        # everything and filter client-side on $schemaRef. Subscribing to
+        # "commodity" directly matches nothing (previous count=0 bug).
+        sock.setsockopt_string(zmq.SUBSCRIBE, "")
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"connect failed: {exc}"}
     collected: list[dict[str, Any]] = []
@@ -44,10 +47,9 @@ def sample(schema: str | None = None, max_messages: int = 5,
                 msg = json.loads(raw.decode("utf-8", "replace"))
             except json.JSONDecodeError:
                 continue
-            if schema and msg.get("$schemaRef") != schema and \
-                    schema not in str(msg.get("$schemaRef", "")):
-                # prefix subscription already filters; keep loose check
-                pass
+            ref = str(msg.get("$schemaRef", ""))
+            if schema and schema.lower() not in ref.lower():
+                continue
             # Slim to the interesting bits
             collected.append({
                 "$schemaRef": msg.get("$schemaRef"),
@@ -62,5 +64,6 @@ def sample(schema: str | None = None, max_messages: int = 5,
             pass
         sock.close(linger=0)
     return {"ok": True, "relay": relay, "count": len(collected), "messages": collected,
+            "filter": schema or "none",
             "schemas": "https://github.com/EDCD/EDDN/tree/master/schemas",
             "note": "Bounded sample only; run a sidecar subscriber for history."}
