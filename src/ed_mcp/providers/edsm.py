@@ -51,7 +51,11 @@ def cube_systems(x: float, y: float, z: float, size_ly: float = 30.0) -> list[di
 
 
 def system_info(system_name: str) -> dict[str, Any]:
-    """Detail for one system: population, government, allegiance, stations."""
+    """Detail for one system: population, government, allegiance, stations.
+
+    EDSM returns a (possibly empty) list instead of an object when the name
+    is unknown or ambiguous; normalize that to {} so callers can .get safely.
+    """
     with _client() as c:
         r = c.get("/api-v1/system", params={
             "systemName": system_name, "showId": 1, "showCoordinates": 1,
@@ -59,7 +63,10 @@ def system_info(system_name: str) -> dict[str, Any]:
             "showStations": 1, "showBodies": 0,
         })
         r.raise_for_status()
-        return r.json()
+        data = r.json()
+    if isinstance(data, list):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def systems_info(system_names: list[str]) -> list[dict[str, Any]]:

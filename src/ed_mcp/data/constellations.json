@@ -10,8 +10,8 @@
       {"name": "Nunki", "edsm": "Nunki", "x": -38.21875, "y": -51.40625, "z": 218.5625},
       {"name": "Phi Sagittarii", "edsm": "Phi Sagittarii", "x": 73.75, "y": -27.0, "z": 60.0},
       {"name": "Alnasl", "edsm": "Alnasl", "x": 87.5, "y": -28.0, "z": 63.0},
-      {"name": "Terebellum", "edsm": "59 Sagittarii", "x": 70.0, "y": -30.0, "z": 57.0}
+      {"name": "Terebellum", "edsm": "Terebellum", "x": -20.125, "y": -36.6875, "z": 73.71875}
     ],
-    "note": "Coordinates for Kaus Borealis/Media/Australis, Ascella, Nunki refreshed from live EDSM 2026-10-04 (sphere searches resolve via 'edsm' names regardless). Phi Sagittarii/Alnasl/Terebellum remain approximate: EDSM returned no entry for those names on 2026-10-04."
+    "note": "Coordinates for Kaus Borealis/Media/Australis, Ascella, Nunki, Terebellum refreshed from live EDSM 2026-10-05 ('Terebellum' resolves; '59 Sagittarii' does not). Sphere searches resolve via 'edsm' names regardless. Phi Sagittarii/Alnasl remain approximate: EDSM returns no entry for 'Phi Sagittarii', 'Gamma Sagittarii' or 'Alnasl' as of 2026-10-05."
   }
 }

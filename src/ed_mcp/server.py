@@ -66,6 +66,8 @@ def edsm_system_info(system_name: str) -> dict[str, Any]:
         info = edsm_p.system_info(system_name)
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
+    if not info or not info.get("name"):
+        return {"ok": False, "error": f"System '{system_name}' not found in EDSM."}
     ok, reasons = col_logic.is_claimable_candidate(info)
     return {"ok": True, "system": info, "claimable_candidate": ok, "reasons": reasons}
 
