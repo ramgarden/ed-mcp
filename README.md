@@ -101,6 +101,58 @@ python -m ed_mcp.server
 
 For Claude Code / `mcp add`, any stdio MCP client works — point it at `python -m ed_mcp.server`.
 
+### OpenCode config
+
+Add an `ed-mcp` entry under `mcpServers` in your OpenCode config
+(`%USERPROFILE%\.config\opencode\opencode.json` on Windows,
+`~/.config/opencode/opencode.json` on macOS/Linux):
+
+```json
+{
+  "mcpServers": {
+    "ed-mcp": {
+      "command": "C:\\Users\\YOU\\Source\\ed-mcp\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "ed_mcp.server"],
+      "env": { "INARA_API_KEY": "…" }
+    }
+  }
+}
+```
+
+Notes:
+- Use the venv Python from step 2 above (the package is installed editable,
+  so `-m ed_mcp.server` resolves from any working directory).
+- `env` is optional — without `INARA_API_KEY` only the `inara_*` API tools
+  stay dormant; the `inara_website_search` fallback still works.
+- Restart OpenCode (or `opencode mcp reload` if supported) after editing.
+
+### GitHub Copilot (VS Code) config
+
+Copilot agent mode consumes MCP servers declared in a workspace
+`.vscode/mcp.json` file (requires VS Code with MCP support enabled).
+Create `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "servers": {
+    "ed-mcp": {
+      "type": "stdio",
+      "command": "C:\\Users\\YOU\\Source\\ed-mcp\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "ed_mcp.server"],
+      "env": { "INARA_API_KEY": "…" }
+    }
+  }
+}
+```
+
+Notes:
+- On macOS/Linux use the venv binary path instead, e.g.
+  `/home/YOU/Source/ed-mcp/.venv/bin/python`.
+- After saving, run **MCP: List Servers** from the VS Code command palette
+  to confirm `ed-mcp` starts, then approve its tools when Copilot asks —
+  approval is per session.
+- Same `INARA_API_KEY` note as above: optional, only gates `inara_*` API tools.
+
 ## Journal location
 
 Defaults (in order):
