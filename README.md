@@ -44,14 +44,16 @@ Claude / LLM client  <--MCP (stdio)-->  ed-mcp server
 | `spansh_query_systems` | Spansh | Flexible tradedangerous-style systems search near a reference |
 | `spansh_search_stations` | Spansh | Full `/stations/search` passthrough (pads/services/market filters) |
 | `find_commodity` | Spansh | Best buy/sell stations for a commodity near you (supply/demand + prices) |
-| `find_module` | Spansh | Stations selling a module (name or `ed_symbol`) near you |
+| `find_module` | Spansh | Stations selling a module near you (multi-page scan; acquisition flags: credits vs special pre-engineered/tech-broker/Powerplay) |
 | `find_ship` | Spansh | Stations selling a ship near you |
+| `station_services` | Spansh | Services/pads/market for a named station (disambiguate by full system name; flags Colonisation contact) |
 | `spansh_search_bodies` | Spansh | Exploration search over bodies (Earth-likes, values, landables) |
 | `system_distance` | EDSM | LY distance + jump estimate between two systems |
 | `inara_search_nearest` | Inara | Nearest stations/components via Inara API (needs key) |
 | `inara_website_search` | Inara web | Search links + page check, no key (bot-limited, open in browser) |
 | `eddn_live_sample` | EDDN | Sample N live EDDN messages from the relay (commodity/outfitting/shipyard) |
 | `find_colonisation_candidates` | EDSM+local | Zero-pop, claimable systems near a constellation/centre (Teapot example) |
+| `get_colony_progress` | journal | Colony build scoreboard: depot manifest + delivered/remaining/% per commodity |
 | `get_exploration_log` | journal | Per-system survey ledger (COMPLETE/PARTIAL/VISITED) + totals |
 | `system_scan_status` | EDSM+journal | Community bodies catalog + value for one system, plus your log row |
 | `find_search_backlog` | EDSM+journal | Systems near a reference you have not fully scanned (search backlog) |
