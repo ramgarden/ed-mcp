@@ -27,13 +27,15 @@ The MCP server is configured in the global OpenCode config at `~/.config/opencod
 | `spansh_query_systems` | Flexible system search |
 | `spansh_search_stations` | Full stations search passthrough |
 | `find_commodity` | Best buy/sell stations for a commodity |
-| `find_module` | Stations selling a module |
+| `find_module` | Stations selling a module (acquisition flags: credits vs special) |
 | `find_ship` | Stations selling a ship |
 | `spansh_search_bodies` | Exploration bodies search |
 | `inara_search_nearest` | Nearest stations via Inara API |
 | `inara_website_search` | Inara web links, no key |
 | `eddn_live_sample` | Live EDDN data |
 | `find_colonisation_candidates` | Zero-pop claimable systems |
+| `get_colony_progress` | Depot manifest + delivered/remaining + % from journals |
+| `station_services` | Services/pads/market for a named station (disambiguate by system) |
 | `get_exploration_log` | Survey ledger per system (COMPLETE/PARTIAL/VISITED) |
 | `system_scan_status` | Community catalog + value + your row for one system |
 | `find_search_backlog` | Nearby systems you have not fully scanned |

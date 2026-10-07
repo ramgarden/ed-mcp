@@ -334,3 +334,24 @@ def get_wallet_summary(limit: int = 5000,
             "market_buy_total": spent_buy, "market_buy_events": n_buy,
             "market_sell_total": earned_sell, "market_sell_events": n_sell,
             "mission_rewards_total": missions, "mission_events": n_missions}
+
+
+def get_colony_depot(journal_dir: Path | str | None = None) -> dict[str, Any]:
+    """Latest ColonisationConstructionDepot event (colony build manifest).
+
+    Returns the raw manifest rows (Name/RequiredAmount/ProvidedAmount/Payment)
+    plus progress flags. Use logic.colonisation.summarise_depot for the
+    scoreboard; returns found False when no claim/beacon exists yet.
+    """
+    jdir = Path(journal_dir) if journal_dir else resolve_journal_dir()
+    if not jdir.exists():
+        return {"found": False, "journal_dir": str(jdir)}
+    latest: dict[str, Any] | None = None
+    for ev in _iter_events(jdir):
+        if ev.get("event") == "ColonisationConstructionDepot":
+            latest = ev
+    if not latest:
+        return {"found": False, "journal_dir": str(jdir),
+                "hint": "No ColonisationConstructionDepot event yet. "
+                        "Register a claim, deploy the beacon, and dock at the colony ship."}
+    return {"found": True, "journal_dir": str(jdir), "depot": latest}

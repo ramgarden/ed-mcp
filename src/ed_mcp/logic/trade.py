@@ -66,21 +66,56 @@ def match_market(results: list[dict[str, Any]], commodity: str,
     return out
 
 
-def match_module(results: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
-    """Stations whose modules list contains the query (name or ed_symbol)."""
+#: How a module is acquired, from Spansh's outfitting `category` field.
+#: Anything but "standard" (e.g. "mercgear" pre-engineered stock) is NOT a
+#: plain credit purchase — it can need tech-broker materials, Powerplay
+#: merits/rank, or other unlocks. Always verify in-game before flying out.
+ACQUISITION_NOTES = {
+    "standard": "credits (normal outfitting purchase)",
+    "mercgear": "SPECIAL: pre-engineered mercenary gear — needs tech-broker materials / unlocks, not just credits",
+    "techbroker": "SPECIAL: technology broker — needs materials unlock, not just credits",
+    "powerplay": "SPECIAL: Powerplay — needs merits and rank, not just credits",
+}
+
+
+def acquisition_of(module: dict[str, Any]) -> tuple[str, str]:
+    """(acquisition, note) for one Spansh outfitting entry."""
+    cat = str(module.get("category") or "standard").lower()
+    if cat == "standard":
+        return "credits", ACQUISITION_NOTES["standard"]
+    return "special", ACQUISITION_NOTES.get(cat, f"SPECIAL: non-standard stock ({cat}) — verify in-game before flying out")
+
+
+def match_module(results: list[dict[str, Any]], query: str,
+                 standard_only: bool = False) -> list[dict[str, Any]]:
+    """Stations whose modules list contains the query (name or ed_symbol).
+
+    Each hit carries `acquisition` ("credits" or "special") plus a note, so
+    pre-engineered/tech-broker/Powerplay stock is never mistaken for a normal
+    credit purchase. `standard_only=True` drops special-acquisition hits.
+    """
     want = query.strip().lower()
     out: list[dict[str, Any]] = []
     for r in results:
-        hits = [m for m in (r.get("modules") or [])
-                if isinstance(m, dict) and
-                (want in str(m.get("name", "")).lower()
-                 or want in str(m.get("ed_symbol", "")).lower())]
+        hits = []
+        for m in (r.get("modules") or []):
+            if not isinstance(m, dict):
+                continue
+            if not (want in str(m.get("name", "")).lower()
+                    or want in str(m.get("ed_symbol", "")).lower()):
+                continue
+            acq, note = acquisition_of(m)
+            if standard_only and acq != "credits":
+                continue
+            hits.append({**m, "acquisition": acq, "acquisition_note": note})
         if hits:
+            specials = sum(1 for h in hits if h["acquisition"] == "special")
             out.append({"station": r.get("name"), "system": r.get("system_name"),
                         "distance_ly": r.get("distance"),
                         "large_pads": r.get("large_pads"),
                         "outfitting_updated_at": r.get("outfitting_updated_at"),
-                        "matches": hits[:10], "match_count": len(hits)})
+                        "matches": hits[:10], "match_count": len(hits),
+                        "has_special_acquisition": specials > 0})
     return sorted(out, key=lambda h: h["distance_ly"] or 9999)
 
 
@@ -117,3 +152,30 @@ def summarise_bodies(results: list[dict[str, Any]],
             "terraforming": b.get("terraforming_state") or b.get("terraform_state"),
         })
     return out
+
+
+def slim_station(record: dict[str, Any]) -> dict[str, Any]:
+    """Slim one Spansh station record to services/pads/market essentials (pure).
+
+    Always surfaces the full system name for galaxy-map paste and flags the
+    System Colonisation contact explicitly. `services_raw` keeps full names.
+    """
+    services = [s.get("name") for s in (record.get("services") or [])
+                if isinstance(s, dict) and s.get("name")]
+    return {
+        "station": record.get("name"), "system": record.get("system_name"),
+        "type": record.get("type"), "distance_ly": record.get("distance"),
+        "distance_to_arrival_ls": record.get("distance_to_arrival"),
+        "large_pads": record.get("large_pads"),
+        "has_large_pad": record.get("has_large_pad"),
+        "is_planetary": record.get("is_planetary"),
+        "has_market": record.get("has_market"),
+        "has_outfitting": record.get("has_outfitting"),
+        "has_shipyard": record.get("has_shipyard"),
+        "has_colonisation_contact": "System Colonisation" in services,
+        "services": services,
+        "system_population": record.get("system_population"),
+        "updated_at": record.get("updated_at"),
+        "market_updated_at": record.get("market_updated_at"),
+        "outfitting_updated_at": record.get("outfitting_updated_at"),
+    }

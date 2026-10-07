@@ -383,16 +383,37 @@ def find_commodity(commodity: str, mode: str = "buy", system_name: str | None = 
 def find_module(module_query: str, system_name: str | None = None,
                 x: float | None = None, y: float | None = None,
                 z: float | None = None, max_results: int = 10,
-                journal_dir: str | None = None) -> dict[str, Any]:
-    """Stations selling a module near you (matches name or ed_symbol, live Spansh)."""
+                journal_dir: str | None = None, pages: int = 1,
+                standard_only: bool = False) -> dict[str, Any]:
+    """Stations selling a module near you (matches name or ed_symbol, live Spansh).
+
+    Scans `pages` x 100 nearest stations (default 1, max 10): Spansh outfitting
+    snapshots are sparse, so one page misses stock. Each hit carries
+    `acquisition` ("credits" vs "special") — pre-engineered/tech-broker/
+    Powerplay stock (e.g. mercgear) is NOT a plain credit purchase.
+    `standard_only=True` drops special-acquisition hits.
+    """
     try:
         _, ref = _ref_coords(system_name, x, y, z, journal_dir)
-        payload = spansh_p.search_stations(
-            filters={}, sorts=[{"distance": {"direction": "asc", "distance": ref}}],
-            page=1, size=100)
-        hits = trade_logic.match_module(payload.get("results", []), module_query)
+        sorts = [{"distance": {"direction": "asc", "distance": ref}}]
+        seen: dict[Any, dict[str, Any]] = {}
+        for page in range(1, min(max(pages, 1), 10) + 1):
+            payload = spansh_p.search_stations(
+                filters={}, sorts=sorts, page=page, size=100)
+            for r in payload.get("results", []) or []:
+                seen[r.get("id", (r.get("name"), r.get("system_name")))] = r
+        hits = trade_logic.match_module(list(seen.values()), module_query,
+                                        standard_only=standard_only)
+        specials = sum(1 for h in hits if h.get("has_special_acquisition"))
+        note = None
+        if specials:
+            note = (f"{specials} station(s) list only special-acquisition stock "
+                    "(pre-engineered/tech-broker/Powerplay — verify in-game, "
+                    "not a plain credit purchase).")
         return {"ok": True, "query": module_query, "ref": ref,
-                "count": len(hits), "stations": hits[:max_results]}
+                "stations_scanned": len(seen),
+                "count": len(hits), "stations": hits[:max_results],
+                "caution": note}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
 
@@ -411,6 +432,52 @@ def find_ship(ship_query: str, system_name: str | None = None,
         hits = trade_logic.match_ship(payload.get("results", []), ship_query)
         return {"ok": True, "query": ship_query, "ref": ref,
                 "count": len(hits), "stations": hits[:max_results]}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def station_services(station_name: str, system_name: str | None = None) -> dict[str, Any]:
+    """Services/pads/market for a named station (live Spansh).
+
+    Duplicate station names exist across systems: pass `system_name` (full
+    name) to disambiguate, otherwise all matches are returned. Flags the
+    System Colonisation contact explicitly. Stock snapshots rotate; verify
+    in-game before flying.
+    """
+    try:
+        data = spansh_p.quick_search(station_name)
+        records = []
+        for r in data.get("results", []) or []:
+            rec = r.get("record") if isinstance(r, dict) else None
+            if isinstance(rec, dict):
+                records.append(rec)
+        if system_name:
+            want = system_name.strip().lower()
+            records = [rec for rec in records
+                       if str(rec.get("system_name", "")).lower() == want]
+        stations = [trade_logic.slim_station(rec) for rec in records]
+        return {"ok": True, "query": station_name, "system_filter": system_name,
+                "count": len(stations), "stations": stations,
+                "note": "Spansh snapshots; verify services in-game before flying."}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def get_colony_progress(journal_dir: str | None = None) -> dict[str, Any]:
+    """Colony build scoreboard from your journals (latest depot manifest).
+
+    Reads the newest ColonisationConstructionDepot event: per-commodity
+    required/provided/remaining/pct plus totals and overall progress.
+    Returns found False when no claim/beacon exists yet.
+    """
+    try:
+        got = journal_p.get_colony_depot(journal_dir)
+        if not got.get("found"):
+            return {"ok": True, **got}
+        board = col_logic.summarise_depot(got["depot"])
+        return {"ok": True, "found": True, **board}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
 
