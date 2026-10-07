@@ -28,6 +28,7 @@ The MCP server is configured in the global OpenCode config at `~/.config/opencod
 | `spansh_search_stations` | Full stations search passthrough |
 | `find_commodity` | Best buy/sell stations for a commodity |
 | `find_module` | Stations selling a module (acquisition flags: credits vs special) |
+| `get_stored_modules` | Your stored modules per station (transfer instead of buying) |
 | `find_ship` | Stations selling a ship |
 | `spansh_search_bodies` | Exploration bodies search |
 | `inara_search_nearest` | Nearest stations via Inara API |

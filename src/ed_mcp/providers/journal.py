@@ -355,3 +355,46 @@ def get_colony_depot(journal_dir: Path | str | None = None) -> dict[str, Any]:
                 "hint": "No ColonisationConstructionDepot event yet. "
                         "Register a claim, deploy the beacon, and dock at the colony ship."}
     return {"found": True, "journal_dir": str(jdir), "depot": latest}
+
+
+def get_stored_modules(journal_dir: Path | str | None = None) -> dict[str, Any]:
+    """Modules in storage across all visited stations (StoredModules events).
+
+    Keeps the latest event per station (MarketID). Identity lives in the
+    `Name` $symbol field (Name_Localised is often generic like "FSD"), so
+    both are returned. Open outfitting/storage in-game to refresh a station.
+    """
+    jdir = Path(journal_dir) if journal_dir else resolve_journal_dir()
+    if not jdir.exists():
+        return {"found": False, "journal_dir": str(jdir)}
+    latest: dict[Any, dict[str, Any]] = {}
+    for ev in _iter_events(jdir):
+        if ev.get("event") == "StoredModules":
+            key = ev.get("MarketID") or (ev.get("StationName"), ev.get("StarSystem"))
+            latest[key] = ev
+    stations: list[dict[str, Any]] = []
+    total = 0
+    for ev in latest.values():
+        items = []
+        for it in ev.get("Items", []) or []:
+            if not isinstance(it, dict):
+                continue
+            total += 1
+            items.append({
+                "symbol": it.get("Name"),
+                "name": it.get("Name_Localised") or it.get("Name"),
+                "hot": bool(it.get("Hot", False)),
+                "transfer_cost": it.get("TransferCost"),
+                "transfer_time_s": it.get("TransferTime"),
+            })
+        if items:
+            stations.append({
+                "station": ev.get("StationName"),
+                "system": ev.get("StarSystem"),
+                "timestamp": ev.get("timestamp"),
+                "items": items,
+            })
+    stations.sort(key=lambda s: s["station"] or "")
+    return {"found": True, "journal_dir": str(jdir),
+            "stations_with_storage": len(stations), "modules_stored": total,
+            "stations": stations}

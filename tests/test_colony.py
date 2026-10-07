@@ -1,6 +1,7 @@
 """Tests for colony scoreboard, module acquisition flags, station slimming."""
 from ed_mcp.logic.colonisation import summarise_depot
-from ed_mcp.logic.trade import match_module, slim_station
+from ed_mcp.logic.trade import label_stored_symbol, match_module, match_stored, slim_station
+from ed_mcp.providers import journal as journal_p
 
 
 def _depot():
@@ -75,3 +76,48 @@ def test_slim_station_flags_colonisation_and_pads():
     assert slim["has_colonisation_contact"] is True
     assert slim["has_large_pad"] is False
     assert slim["services"] == ["Dock", "System Colonisation"]
+
+
+def test_label_stored_symbol():
+    assert label_stored_symbol("$int_hyperdrive_size2_class1_name;") == "2E hyperdrive"
+    assert label_stored_symbol("$int_powerdistributor_size7_class5_name;") == "7A powerdistributor"
+    assert label_stored_symbol(None) == ""
+    assert label_stored_symbol("weird") == "weird"
+
+
+def test_match_stored_flags_owned():
+    stations = [{
+        "station": "Bushkov City", "system": "HIP 48391", "timestamp": "t",
+        "items": [
+            {"symbol": "$int_hyperdrive_size2_class1_name;",
+             "name": "FSD", "hot": False, "transfer_cost": 0,
+             "transfer_time_s": 0},
+            {"symbol": "$int_powerdistributor_size7_class5_name;",
+             "name": "Power Distributor", "hot": False,
+             "transfer_cost": 100, "transfer_time_s": 60},
+        ],
+    }]
+    hits = match_stored(stations, "power distributor")
+    assert len(hits) == 1
+    assert hits[0]["match_count"] == 1
+    assert hits[0]["matches"][0]["acquisition"] == "owned"
+    assert match_stored(stations, "shield generator") == []
+
+
+def test_get_stored_modules_journal(tmp_path):
+    import json
+    ev1 = {"timestamp": "2026-01-01T00:00:00Z", "event": "StoredModules",
+           "MarketID": 1, "StationName": "Mawson Dock", "StarSystem": "Dromi",
+           "Items": []}
+    ev2 = {"timestamp": "2026-01-02T00:00:00Z", "event": "StoredModules",
+           "MarketID": 2, "StationName": "Bushkov City",
+           "StarSystem": "HIP 48391",
+           "Items": [{"Name": "$int_hyperdrive_size2_class1_name;",
+                      "Name_Localised": "FSD", "Hot": False,
+                      "TransferCost": 0, "TransferTime": 0}]}
+    with open(tmp_path / "Journal.2026-01-01.log", "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(ev1) + "\n" + json.dumps(ev2) + "\n")
+    got = journal_p.get_stored_modules(tmp_path)
+    assert got["found"] is True
+    assert got["modules_stored"] == 1
+    assert got["stations"][0]["system"] == "HIP 48391"

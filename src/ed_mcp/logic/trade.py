@@ -179,3 +179,47 @@ def slim_station(record: dict[str, Any]) -> dict[str, Any]:
         "market_updated_at": record.get("market_updated_at"),
         "outfitting_updated_at": record.get("outfitting_updated_at"),
     }
+
+
+RATING_LETTER = {1: "E", 2: "D", 3: "C", 4: "B", 5: "A"}
+
+
+def label_stored_symbol(symbol: str | None) -> str:
+    """Human label for a journal module $symbol (pure).
+
+    StoredModules Name_Localised is often generic ("FSD"); the symbol
+    ($int_hyperdrive_size2_class1_name;) carries size+rating, so derive
+    e.g. "2E FSD" from it. Unknown shapes pass through unchanged.
+    """
+    import re
+    s = str(symbol or "")
+    m = re.search(r"\$?int_(\w+?)_size(\d)_class(\d)", s)
+    if not m:
+        return s
+    pretty = m.group(1).replace("_", " ")
+    rating = RATING_LETTER.get(int(m.group(3)), "?")
+    return f"{m.group(2)}{rating} {pretty}".strip()
+
+
+def match_stored(stations: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    """Stored modules matching a query (symbol, label, or localised name).
+
+    Returns per-station hits flagged acquisition "owned" — transfer the
+    module instead of buying one. Pure; no network.
+    """
+    want = query.strip().lower()
+    out: list[dict[str, Any]] = []
+    for st in stations:
+        hits = []
+        for it in st.get("items", []) or []:
+            label = label_stored_symbol(it.get("symbol"))
+            hay = f"{it.get('symbol', '')} {label} {it.get('name', '')}".lower()
+            if want and want not in hay:
+                continue
+            hits.append({**it, "label": label, "acquisition": "owned",
+                         "acquisition_note": "already yours — transfer it, don't buy one"})
+        if hits:
+            out.append({"station": st.get("station"), "system": st.get("system"),
+                        "timestamp": st.get("timestamp"),
+                        "matches": hits, "match_count": len(hits)})
+    return out

@@ -46,6 +46,7 @@ Claude / LLM client  <--MCP (stdio)-->  ed-mcp server
 | `find_commodity` | Spansh | Best buy/sell stations for a commodity near you (supply/demand + prices) |
 | `find_module` | Spansh | Stations selling a module near you (multi-page scan; acquisition flags: credits vs special pre-engineered/tech-broker/Powerplay) |
 | `find_ship` | Spansh | Stations selling a ship near you |
+| `get_stored_modules` | journal | Your stored modules per station — transfer instead of buying (`find_module` also checks storage automatically) |
 | `station_services` | Spansh | Services/pads/market for a named station (disambiguate by full system name; flags Colonisation contact) |
 | `spansh_search_bodies` | Spansh | Exploration search over bodies (Earth-likes, values, landables) |
 | `system_distance` | EDSM | LY distance + jump estimate between two systems |

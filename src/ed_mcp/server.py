@@ -410,9 +410,21 @@ def find_module(module_query: str, system_name: str | None = None,
             note = (f"{specials} station(s) list only special-acquisition stock "
                     "(pre-engineered/tech-broker/Powerplay — verify in-game, "
                     "not a plain credit purchase).")
+        stored = []
+        try:
+            own = journal_p.get_stored_modules(journal_dir)
+            if own.get("found"):
+                stored = trade_logic.match_stored(own.get("stations", []), module_query)
+        except Exception:  # noqa: BLE001
+            stored = []
+        if stored:
+            note = ((note + " " if note else "") +
+                    f"You already own {sum(s['match_count'] for s in stored)} matching "
+                    "module(s) in storage — transfer instead of buying.")
         return {"ok": True, "query": module_query, "ref": ref,
                 "stations_scanned": len(seen),
                 "count": len(hits), "stations": hits[:max_results],
+                "owned_in_storage": stored,
                 "caution": note}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
@@ -478,6 +490,19 @@ def get_colony_progress(journal_dir: str | None = None) -> dict[str, Any]:
             return {"ok": True, **got}
         board = col_logic.summarise_depot(got["depot"])
         return {"ok": True, "found": True, **board}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def get_stored_modules(journal_dir: str | None = None) -> dict[str, Any]:
+    """Modules you own in storage, per station (StoredModules journal events).
+
+    Check here before buying: a stored module only needs a transfer.
+    Open outfitting/storage in-game to refresh a station's entry.
+    """
+    try:
+        return {"ok": True, **journal_p.get_stored_modules(journal_dir)}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
 
