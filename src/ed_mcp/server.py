@@ -380,6 +380,41 @@ def find_commodity(commodity: str, mode: str = "buy", system_name: str | None = 
 
 
 @mcp.tool()
+def find_multi_supply(commodities: dict[str, int],
+                      system_name: str | None = None,
+                      x: float | None = None, y: float | None = None,
+                      z: float | None = None, large_pad_only: bool = False,
+                      orbital_only: bool = False, pages: int = 4,
+                      max_results: int = 10,
+                      journal_dir: str | None = None) -> dict[str, Any]:
+    """One station covering a whole shopping list (live Spansh markets).
+
+    `commodities` maps name -> minimum supply for one full load, e.g.
+    {"Steel": 2000, "Titanium": 2000}. Scans `pages` x 100 nearest stations
+    (default 4, max 10); full-cover stations first, then most lines covered,
+    then nearest. Stock rotates; verify in-game before flying.
+    """
+    try:
+        _, ref = _ref_coords(system_name, x, y, z, journal_dir)
+        sorts = [{"distance": {"direction": "asc", "distance": ref}}]
+        seen: dict[Any, dict[str, Any]] = {}
+        for page in range(1, min(max(pages, 1), 10) + 1):
+            payload = spansh_p.search_stations(
+                filters={}, sorts=sorts, page=page, size=100)
+            for r in payload.get("results", []) or []:
+                seen[r.get("id", (r.get("name"), r.get("system_name")))] = r
+        hits = trade_logic.match_multi_supply(
+            list(seen.values()), commodities,
+            large_pad_only=large_pad_only, orbital_only=orbital_only)
+        return {"ok": True, "commodities": commodities, "ref": ref,
+                "stations_scanned": len(seen),
+                "count": len(hits), "stations": hits[:max_results],
+                "note": "Spansh market snapshots; verify live stock in-game."}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
 def find_module(module_query: str, system_name: str | None = None,
                 x: float | None = None, y: float | None = None,
                 z: float | None = None, max_results: int = 10,

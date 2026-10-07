@@ -27,6 +27,7 @@ The MCP server is configured in the global OpenCode config at `~/.config/opencod
 | `spansh_query_systems` | Flexible system search |
 | `spansh_search_stations` | Full stations search passthrough |
 | `find_commodity` | Best buy/sell stations for a commodity |
+| `find_multi_supply` | One station covering a whole shopping list (min supply each) |
 | `find_module` | Stations selling a module (acquisition flags: credits vs special) |
 | `get_stored_modules` | Your stored modules per station (transfer instead of buying) |
 | `find_ship` | Stations selling a ship |
@@ -52,3 +53,4 @@ The MCP server is configured in the global OpenCode config at `~/.config/opencod
 - For material/commodity queries, check market data via Spansh or EDDN
 - For station/outfitting queries, prefer Spansh over EDSM
 - Always return the FULL system name (e.g. `Col 359 Sector IZ-T a20-2`, not `IZ-T a20-2`) so it can be copy-pasted into the game's galaxy map search
+- Promote one-off scripts into the service: whenever you hand-write a throwaway query script against ed-mcp providers/Spansh/EDSM to answer something, turn it into a proper MCP tool (pure logic in `logic/`, thin tool wrapper in `server.py`) with offline unit tests, update README + AGENTS.md tool tables, and commit + push. Never leave repeated query patterns as scratch files.

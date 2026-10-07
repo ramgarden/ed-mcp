@@ -1,6 +1,12 @@
 """Tests for colony scoreboard, module acquisition flags, station slimming."""
 from ed_mcp.logic.colonisation import summarise_depot
-from ed_mcp.logic.trade import label_stored_symbol, match_module, match_stored, slim_station
+from ed_mcp.logic.trade import (
+    label_stored_symbol,
+    match_module,
+    match_multi_supply,
+    match_stored,
+    slim_station,
+)
 from ed_mcp.providers import journal as journal_p
 
 
@@ -121,3 +127,39 @@ def test_get_stored_modules_journal(tmp_path):
     assert got["found"] is True
     assert got["modules_stored"] == 1
     assert got["stations"][0]["system"] == "HIP 48391"
+
+
+def _station(name, system, dist, mkt, **kw):
+    rec = {"id": name, "name": name, "system_name": system, "distance": dist,
+           "type": "Coriolis Starport", "is_planetary": False,
+           "has_large_pad": True, "market": mkt,
+           "market_updated_at": "t"}
+    rec.update(kw)
+    return rec
+
+
+def _mkt(*rows):
+    return [{"commodity": c, "supply": s, "buy_price": 1, "sell_price": 1}
+            for c, s in rows]
+
+
+def test_match_multi_supply_full_cover_first():
+    results = [
+        _station("Near", "Sys A", 10.0, _mkt(("Steel", 5000), ("Titanium", 100))),
+        _station("Far", "Sys B", 25.0, _mkt(("Steel", 5000), ("Titanium", 5000))),
+        _station("Dirt", "Sys C", 5.0, _mkt(("Steel", 5000), ("Titanium", 5000)),
+                 is_planetary=True, type="Planetary Outpost"),
+    ]
+    hits = match_multi_supply(results, {"Steel": 2000, "Titanium": 2000})
+    assert [h["station"] for h in hits] == ["Dirt", "Far", "Near"]
+    assert hits[0]["full_cover"] is True
+    assert hits[2]["covered"] == 1
+    hits_orb = match_multi_supply(results, {"Steel": 2000, "Titanium": 2000},
+                                  orbital_only=True)
+    assert [h["station"] for h in hits_orb] == ["Far", "Near"]
+    # large_pad_only drops pad-less stations
+    hits_pad = match_multi_supply(
+        [_station("NoPad", "Sys D", 1.0, _mkt(("Steel", 9000), ("Titanium", 9000)),
+                  has_large_pad=False)],
+        {"Steel": 2000, "Titanium": 2000}, large_pad_only=True)
+    assert hits_pad == []

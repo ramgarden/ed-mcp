@@ -223,3 +223,48 @@ def match_stored(stations: list[dict[str, Any]], query: str) -> list[dict[str, A
                         "timestamp": st.get("timestamp"),
                         "matches": hits, "match_count": len(hits)})
     return out
+
+
+def match_multi_supply(results: list[dict[str, Any]],
+                       needs: dict[str, int],
+                       large_pad_only: bool = False,
+                       orbital_only: bool = False) -> list[dict[str, Any]]:
+    """Stations stocking several commodities at once (pure).
+
+    `needs` maps commodity (substring, case-insensitive) -> minimum supply
+    for one full load. Returns stations covering at least one need, richest
+    coverage first, then nearest. Never invents stock: only listed rows.
+    """
+    want = {k.strip().lower(): int(v) for k, v in needs.items() if int(v) > 0}
+    out: list[dict[str, Any]] = []
+    for r in results:
+        if large_pad_only and not r.get("has_large_pad"):
+            continue
+        if orbital_only and r.get("is_planetary"):
+            continue
+        market = {str(c.get("commodity", "")).lower(): c
+                  for c in (r.get("market") or []) if isinstance(c, dict)}
+        covered: dict[str, Any] = {}
+        for name, minimum in want.items():
+            hit = next((c for key, c in market.items() if name in key), None)
+            if hit is not None and int(hit.get("supply") or 0) >= minimum:
+                covered[hit.get("commodity")] = {
+                    "supply": hit.get("supply"),
+                    "buy_price": hit.get("buy_price"),
+                    "sell_price": hit.get("sell_price"),
+                }
+        if covered:
+            out.append({
+                "station": r.get("name"), "system": r.get("system_name"),
+                "distance_ly": r.get("distance"),
+                "distance_to_arrival_ls": r.get("distance_to_arrival"),
+                "type": r.get("type"), "is_planetary": r.get("is_planetary"),
+                "large_pads": r.get("large_pads"),
+                "market_updated_at": r.get("market_updated_at"),
+                "covered": len(covered), "wanted": len(want),
+                "full_cover": len(covered) == len(want),
+                "stock": covered,
+            })
+    return sorted(out, key=lambda h: (not h["full_cover"],
+                                      -(h["covered"]),
+                                      h["distance_ly"] or 9999))

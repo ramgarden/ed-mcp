@@ -44,6 +44,7 @@ Claude / LLM client  <--MCP (stdio)-->  ed-mcp server
 | `spansh_query_systems` | Spansh | Flexible tradedangerous-style systems search near a reference |
 | `spansh_search_stations` | Spansh | Full `/stations/search` passthrough (pads/services/market filters) |
 | `find_commodity` | Spansh | Best buy/sell stations for a commodity near you (supply/demand + prices) |
+| `find_multi_supply` | Spansh | One station covering a whole shopping list (minimum supply each; orbital/large-pad filters) |
 | `find_module` | Spansh | Stations selling a module near you (multi-page scan; acquisition flags: credits vs special pre-engineered/tech-broker/Powerplay) |
 | `find_ship` | Spansh | Stations selling a ship near you |
 | `get_stored_modules` | journal | Your stored modules per station — transfer instead of buying (`find_module` also checks storage automatically) |
