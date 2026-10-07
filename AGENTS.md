@@ -48,3 +48,4 @@ The MCP server is configured in the global OpenCode config at `~/.config/opencod
 - The MCP server runs locally; it does not expose journals over the network
 - For material/commodity queries, check market data via Spansh or EDDN
 - For station/outfitting queries, prefer Spansh over EDSM
+- Always return the FULL system name (e.g. `Col 359 Sector IZ-T a20-2`, not `IZ-T a20-2`) so it can be copy-pasted into the game's galaxy map search
