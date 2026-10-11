@@ -1,5 +1,5 @@
 """Tests for colony scoreboard, module acquisition flags, station slimming."""
-from ed_mcp.logic.colonisation import summarise_depot
+from ed_mcp.logic.colonisation import summarise_depot, summarise_progress
 from ed_mcp.logic.trade import (
     label_stored_symbol,
     match_module,
@@ -39,6 +39,29 @@ def test_summarise_depot_totals_and_order():
     assert names == ["CMM Composite", "Steel", "Semiconductors"]
     steel = next(r for r in board["resources"] if r["commodity"] == "Steel")
     assert steel["remaining"] == 6660 - 368
+
+
+def test_summarise_progress_pace_and_eta():
+    depots = [_depot()]
+    contribs = [
+        {"timestamp": "2026-10-06T20:00:00Z", "event": "ColonisationContribution",
+         "Contributions": [{"Name_Localised": "Steel", "Amount": 368}]},
+        {"timestamp": "2026-10-07T20:00:00Z", "event": "ColonisationContribution",
+         "Contributions": [{"Name_Localised": "Steel", "Amount": 368}]},
+    ]
+    claims = [{"timestamp": "2026-10-06T19:00:00Z",
+               "event": "ColonisationSystemClaim", "StarSystem": "Col 359 Sector IZ-T a20-2"}]
+    out = summarise_progress(depots, contribs, claims, now_iso="2026-10-08T20:00:00Z")
+    assert out["found"] is True
+    assert out["claimed_system"] == "Col 359 Sector IZ-T a20-2"
+    assert out["your_contributed_t"] == 736
+    # fixture depot shows less provided than these contributions (open-play
+    # depot vs local contributions); others floor at zero, never negative
+    assert out["others_contributed_t"] == 0
+    assert out["total_remaining"] == (6660 + 68 + 4508) - (368 + 68)
+    assert out["eta_days"] > 0 and out["needed_pace_t_per_day"] > 0
+    empty = summarise_progress([], [], [])
+    assert empty["found"] is False
 
 
 def test_match_module_acquisition_flags():

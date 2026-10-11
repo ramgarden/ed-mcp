@@ -1,12 +1,18 @@
-"""Colonisation-candidate logic: zero-population, claimable systems.
+"""Colonisation logic: claimable systems + construction scoreboard.
 
 Frontier colonisation rules change; this module encodes the stable,
 checkable core: unpopulated, no permit lock, not already settled, main star
 scoopable preferred. Everything is returned with provenance so the LLM can
 show *why* each candidate qualifies and what to double-check in-game.
+
+The scoreboard reads ColonisationConstructionDepot events (whole-depot
+manifest, all haulers) plus ColonisationContribution events (yours only):
+the gap between depot ProvidedAmount and your contributions is fellow
+haulers in open play.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -90,3 +96,63 @@ def summarise_depot(depot: dict[str, Any]) -> dict[str, Any]:
         "lines_total": len(rows),
         "resources": rows,
     }
+
+
+def _parse_ts(s: str | None) -> datetime | None:
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def summarise_progress(depot_events: list[dict[str, Any]],
+                       contrib_events: list[dict[str, Any]],
+                       claim_events: list[dict[str, Any]],
+                       now_iso: str | None = None) -> dict[str, Any]:
+    """Full construction picture: depot board + claim + your pace + ETA.
+
+    Pure (testable): pass filtered journal events. Depot ProvidedAmount
+    counts everyone's deliveries; Contributions count only yours.
+    """
+    if not depot_events:
+        return {"found": False,
+                "hint": "No ColonisationConstructionDepot events. Dock at the colony ship to log one."}
+    board = summarise_depot(depot_events[-1])
+    claim = next((e for e in claim_events
+                  if e.get("event") == "ColonisationSystemClaim"), None)
+    beacon = next((e for e in claim_events
+                   if e.get("event") == "ColonisationBeaconDeployed"), None)
+    mine = 0
+    for ev in contrib_events:
+        for c in ev.get("Contributions", []) or []:
+            mine += int(c.get("Amount", 0) or 0)
+    now = _parse_ts(now_iso) or datetime.now(timezone.utc)
+    t0 = _parse_ts(depot_events[0].get("timestamp"))
+    days_elapsed = max(((now - t0).total_seconds() / 86400) if t0 else 0, 1 / 24)
+    rate = mine / days_elapsed if contrib_events else 0.0
+    remaining = board["total_remaining"]
+    days_left = max(0.0, 28.0 - days_elapsed)
+    board.update({
+        "found": True,
+        "remaining": remaining,
+        "claimed_system": (claim or {}).get("StarSystem"),
+        "claimed_at": (claim or {}).get("timestamp"),
+        "beacon_at": (beacon or {}).get("timestamp"),
+        "your_contributed_t": mine,
+        "others_contributed_t": max(0, board["total_provided"] - mine),
+        "contribution_events": len(contrib_events),
+        "rate_t_per_day": round(rate, 1),
+        "days_elapsed": round(days_elapsed, 2),
+        "days_left": round(days_left, 2),
+    })
+    if remaining <= 0:
+        board["eta"] = "complete"
+    elif rate > 0:
+        eta_days = remaining / rate
+        board["eta_days"] = round(eta_days, 2)
+        board["vs_deadline_days"] = round(eta_days - days_left, 2)
+        board["needed_pace_t_per_day"] = (
+            round(remaining / days_left, 1) if days_left > 0 else None)
+    return board
