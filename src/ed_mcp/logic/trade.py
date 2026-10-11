@@ -266,5 +266,42 @@ def match_multi_supply(results: list[dict[str, Any]],
                 "stock": covered,
             })
     return sorted(out, key=lambda h: (not h["full_cover"],
-                                      -(h["covered"]),
-                                      h["distance_ly"] or 9999))
+                                       -(h["covered"]),
+                                       h["distance_ly"] or 9999))
+
+
+TRADE_ECONOMIES = {"industrial", "refinery", "high tech", "extraction",
+                   "agriculture", "tourism", "service"}
+
+
+def classify_systems(systems: list[dict[str, Any]],
+                     max_each: int = 10) -> dict[str, Any]:
+    """Group an EDSM sphere into money-making buckets (pure, testable).
+
+    trade_hubs: populated, producer economies (buy low / sell runs).
+    mission_ports: most populated (mission boards scale with population).
+    exobio_frontier: unpopulated systems (first-logged biology/exploration).
+    Never invents stations or stock — buckets for follow-up queries.
+    """
+    trade, missions, wild = [], [], []
+    for s in systems:
+        info = s.get("information", {}) or {}
+        pop = info.get("population") or 0
+        econ = str(info.get("economy") or "")
+        row = {"system": s.get("name"), "distance_ly": s.get("distance"),
+               "population": pop, "economy": econ or None,
+               "government": info.get("government"),
+               "body_count": s.get("bodyCount")}
+        if pop and pop > 0:
+            missions.append(row)
+            if econ.lower() in TRADE_ECONOMIES:
+                trade.append(row)
+        else:
+            wild.append(row)
+    missions.sort(key=lambda r: -(r["population"] or 0))
+    trade.sort(key=lambda r: r["distance_ly"] if r["distance_ly"] is not None else 9999)
+    wild.sort(key=lambda r: r["distance_ly"] if r["distance_ly"] is not None else 9999)
+    return {"populated": len(missions), "unpopulated": len(wild),
+            "trade_hubs": trade[:max_each],
+            "mission_ports": missions[:max_each],
+            "exobio_frontier": wild[:max_each]}

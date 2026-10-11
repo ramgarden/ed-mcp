@@ -602,6 +602,42 @@ def system_distance(from_system: str, to_system: str,
         return {"ok": False, "error": str(exc)}
 
 
+@mcp.tool()
+def find_local_opportunities(system_name: str | None = None,
+                             radius_ly: float = 40.0,
+                             journal_dir: str | None = None) -> dict[str, Any]:
+    """What's profitable near you: trade hubs, mission ports, exobio frontier.
+
+    Live EDSM sphere around a system (or your journal location) grouped into
+    money-making buckets. Buckets only — follow up with find_commodity or
+    station_services before flying.
+    """
+    try:
+        if system_name:
+            sphere = edsm_p.sphere_systems(system_name=system_name,
+                                           radius_ly=radius_ly)
+            ref = system_name
+        else:
+            loc = journal_p.get_location(journal_dir)
+            if not loc.get("found"):
+                return {"ok": False,
+                        "error": "No journal location; pass system_name."}
+            ref = loc.get("system")
+            coords = loc.get("star_pos")
+            if coords and len(coords) == 3:
+                sphere = edsm_p.sphere_systems(x=coords[0], y=coords[1],
+                                               z=coords[2], radius_ly=radius_ly)
+            else:
+                sphere = edsm_p.sphere_systems(system_name=ref,
+                                               radius_ly=radius_ly)
+        out = trade_logic.classify_systems(sphere)
+        return {"ok": True, "reference": ref, "radius_ly": radius_ly,
+                "sphere_count": len(sphere), **out,
+                "note": "Buckets only; verify markets/missions in-game."}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
 # ---- exploration survey: searched vs unsearched (Raxxla-grid support) ----
 @mcp.tool()
 def get_exploration_log(journal_dir: str | None = None, grade: str | None = None,

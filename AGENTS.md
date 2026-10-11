@@ -24,6 +24,7 @@ The MCP server is configured in the global OpenCode config at `~/.config/opencod
 | `edsm_sphere_systems` | Systems in radius |
 | `edsm_system_info` | Population, government, claimable check |
 | `system_distance` | LY distance + jumps between systems |
+| `find_local_opportunities` | Trade/mission/exobio buckets near you |
 | `spansh_find_nearby_stations` | Stations near coords |
 | `spansh_query_systems` | Flexible system search |
 | `spansh_search_stations` | Full stations search passthrough |

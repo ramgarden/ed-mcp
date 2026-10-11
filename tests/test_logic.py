@@ -2,8 +2,9 @@
 from ed_mcp.data import load_anaconda_cargo_build, load_constellations
 from ed_mcp.logic.colonisation import dedupe_by_name, is_claimable_candidate
 from ed_mcp.logic.outfitting import shopping_list_for_build, summarise_station_stock
-from ed_mcp.logic.trade import (distance_ly, jumps_needed, match_market,
-                                match_module, match_ship, summarise_bodies)
+from ed_mcp.logic.trade import (classify_systems, distance_ly, jumps_needed,
+                                match_market, match_module, match_ship,
+                                summarise_bodies)
 from ed_mcp.providers.journal import cargo_capacity_of_modules
 
 
@@ -124,3 +125,23 @@ def test_survey_rollup_grades():
     cat = summarise_bodies_catalog([{"subType": "Earth-like world", "isLandable": True},
                                     {"type": "Star"}])
     assert cat["catalogued"] == 2 and cat["landable"] == 1
+
+
+def test_classify_systems_buckets():
+    sphere = [
+        {"name": "Hub", "distance": 5.0, "bodyCount": 10,
+         "information": {"population": 100000, "economy": "Industrial",
+                         "government": "Democracy"}},
+        {"name": "Big", "distance": 2.0, "bodyCount": 5,
+         "information": {"population": 9000000, "economy": "Tourism",
+                         "government": "Corporate"}},
+        {"name": "Wild", "distance": 1.0, "bodyCount": 12,
+         "information": {"population": 0, "economy": None,
+                         "government": None}},
+    ]
+    out = classify_systems(sphere)
+    assert out["populated"] == 2 and out["unpopulated"] == 1
+    # Tourism is a trade economy too; nearest first
+    assert [h["system"] for h in out["trade_hubs"]] == ["Big", "Hub"]
+    assert out["mission_ports"][0]["system"] == "Big"  # biggest pop first
+    assert out["exobio_frontier"][0]["system"] == "Wild"
