@@ -313,6 +313,29 @@ def get_odyssey_state(journal_dir: str | None = None) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
+@mcp.tool()
+def find_stored_ship(query: str | None = None,
+                     journal_dir: str | None = None) -> dict[str, Any]:
+    """Locate a stored ship: station/system + transfer cost/time.
+
+    Matches name or ship type (case-insensitive); omit query to list all.
+    Latest StoredShips sighting per ship wins.
+    """
+    try:
+        got = journal_p.get_stored_ships(journal_dir)
+        if not got.get("found"):
+            return {"ok": True, **got}
+        ships = got.get("ships", [])
+        if query:
+            want = query.strip().lower()
+            ships = [s for s in ships
+                     if want in str(s.get("name") or "").lower()
+                     or want in str(s.get("ship") or "").lower()]
+        return {"ok": True, "query": query, "count": len(ships), "ships": ships}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
 # ---- Spansh/EDSM: trade, outfitting, shipyard, exploration, distances ----
 def _ref_coords(system_name: str | None, x: float | None, y: float | None,
                z: float | None,
@@ -515,16 +538,12 @@ def station_services(station_name: str, system_name: str | None = None) -> dict[
 def get_colony_progress(journal_dir: str | None = None) -> dict[str, Any]:
     """Colony build scoreboard from your journals (latest depot manifest).
 
-    Reads the newest ColonisationConstructionDepot event: per-commodity
-    required/provided/remaining/pct plus totals and overall progress.
-    Returns found False when no claim/beacon exists yet.
+    Per-commodity required/provided/remaining plus totals, overall progress,
+    claimed system, your-vs-others tonnage, delivery pace and ETA vs the
+    28-day window. Returns found False when no claim/beacon exists yet.
     """
     try:
-        got = journal_p.get_colony_depot(journal_dir)
-        if not got.get("found"):
-            return {"ok": True, **got}
-        board = col_logic.summarise_depot(got["depot"])
-        return {"ok": True, "found": True, **board}
+        return {"ok": True, **journal_p.get_colony_progress(journal_dir)}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
 

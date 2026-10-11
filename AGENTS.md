@@ -18,6 +18,7 @@ The MCP server is configured in the global OpenCode config at `~/.config/opencod
 | `get_station_outfitting` | Outfitting stock here |
 | `get_station_shipyard` | Shipyard stock here |
 | `get_fleet_overview` | All ships + cargo each |
+| `find_stored_ship` | Stored-ship location + transfer cost/time |
 | `get_wallet_summary` | Credits + trade/mission sums |
 | `get_odyssey_state` | Backpack + ShipLocker + suit |
 | `edsm_sphere_systems` | Systems in radius |

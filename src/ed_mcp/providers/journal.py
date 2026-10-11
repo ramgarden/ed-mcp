@@ -305,6 +305,45 @@ def get_fleet_overview(journal_dir: Path | str | None = None) -> dict[str, Any]:
     return {"found": True, "count": len(ships), "ships": ships}
 
 
+def get_stored_ships(journal_dir: Path | str | None = None) -> dict[str, Any]:
+    """Where each stored ship is + transfer cost/time (StoredShips events).
+
+    Keyed by ShipID (stable per commander). A ship seen in ShipsHere is at
+    that station; in ShipsRemote it sits at the listed system with the given
+    transfer price/time. Latest sighting per ship wins.
+    """
+    jdir = Path(journal_dir) if journal_dir else resolve_journal_dir()
+    if not jdir.exists():
+        return {"found": False, "journal_dir": str(jdir)}
+    seen: dict[Any, dict[str, Any]] = {}
+    for ev in _iter_events(jdir):
+        if ev.get("event") != "StoredShips":
+            continue
+        station, system = ev.get("StationName"), ev.get("StarSystem")
+        for s in (ev.get("ShipsHere") or []):
+            if isinstance(s, dict) and s.get("ShipID") is not None:
+                seen[s["ShipID"]] = {"ship_id": s.get("ShipID"),
+                                     "ship": s.get("ShipType"), "name": s.get("Name"),
+                                     "station": station, "system": system,
+                                     "here": True, "value": s.get("Value"),
+                                     "timestamp": ev.get("timestamp")}
+        for s in (ev.get("ShipsRemote") or []):
+            if isinstance(s, dict) and s.get("ShipID") is not None:
+                seen[s["ShipID"]] = {"ship_id": s.get("ShipID"),
+                                     "ship": s.get("ShipType") or s.get("ShipType_Localised"),
+                                     "name": s.get("Name"),
+                                     "station": None,
+                                     "system": s.get("StarSystem"),
+                                     "here": False,
+                                     "transfer_price": s.get("TransferPrice"),
+                                     "transfer_time_s": s.get("TransferTime"),
+                                     "value": s.get("Value"),
+                                     "timestamp": ev.get("timestamp")}
+    ships = sorted(seen.values(), key=lambda s: s.get("timestamp", ""), reverse=True)
+    return {"found": True, "journal_dir": str(jdir),
+            "count": len(ships), "ships": ships}
+
+
 def get_wallet_summary(limit: int = 5000,
                        journal_dir: Path | str | None = None) -> dict[str, Any]:
     """Credits now + sums of recent trade/mission/carrier flows."""
@@ -398,3 +437,30 @@ def get_stored_modules(journal_dir: Path | str | None = None) -> dict[str, Any]:
     return {"found": True, "journal_dir": str(jdir),
             "stations_with_storage": len(stations), "modules_stored": total,
             "stations": stations}
+
+
+def get_colony_progress(journal_dir: Path | str | None = None) -> dict[str, Any]:
+    """Colony build progress: depot manifest + your contributions + pace/ETA.
+
+    Depot ProvidedAmount counts EVERYONE's deliveries (open play); the
+    Contributions list counts only yours. Summarised by logic.colonisation.
+    """
+    from ed_mcp.logic import colonisation as colony_logic
+    jdir = Path(journal_dir) if journal_dir else resolve_journal_dir()
+    if not jdir.exists():
+        return {"found": False, "journal_dir": str(jdir)}
+    depots = [ev for ev in _iter_events(jdir)
+              if ev.get("event") == "ColonisationConstructionDepot"]
+    contribs = [ev for ev in _iter_events(jdir)
+                if ev.get("event") == "ColonisationContribution"]
+    claims = [ev for ev in _iter_events(jdir)
+              if ev.get("event") in ("ColonisationSystemClaim",
+                                     "ColonisationBeaconDeployed")]
+    latest_ts = ""
+    for ev in _iter_events(jdir):
+        if ev.get("timestamp", "") > latest_ts:
+            latest_ts = ev.get("timestamp", "")
+    out = colony_logic.summarise_progress(depots, contribs, claims,
+                                          now_iso=latest_ts or None)
+    out["journal_dir"] = str(jdir)
+    return out

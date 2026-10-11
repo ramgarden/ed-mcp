@@ -36,6 +36,7 @@ Claude / LLM client  <--MCP (stdio)-->  ed-mcp server
 | `get_station_outfitting` | journal | Outfitting stock at station (`Outfitting.json` + `ModulesInfo.json`) |
 | `get_station_shipyard` | journal | Shipyard stock at station (`Shipyard.json`) |
 | `get_fleet_overview` | journal | All ships + computed cargo each (latest first) |
+| `find_stored_ship` | journal | Locate a stored ship: station/system + transfer cost/time |
 | `get_wallet_summary` | journal | Credits + trade/mission reward sums |
 | `get_odyssey_state` | journal | Backpack + ShipLocker + suit loadout (on-foot) |
 | `edsm_sphere_systems` | EDSM | Systems in a radius around coordinates / system name |
@@ -55,7 +56,7 @@ Claude / LLM client  <--MCP (stdio)-->  ed-mcp server
 | `inara_website_search` | Inara web | Search links + page check, no key (bot-limited, open in browser) |
 | `eddn_live_sample` | EDDN | Sample N live EDDN messages from the relay (commodity/outfitting/shipyard) |
 | `find_colonisation_candidates` | EDSM+local | Zero-pop, claimable systems near a constellation/centre (Teapot example) |
-| `get_colony_progress` | journal | Colony build scoreboard: depot manifest + delivered/remaining/% per commodity |
+| `get_colony_progress` | journal | Colony scoreboard: manifest + delivered/remaining/% + your pace + ETA |
 | `get_exploration_log` | journal | Per-system survey ledger (COMPLETE/PARTIAL/VISITED) + totals |
 | `system_scan_status` | EDSM+journal | Community bodies catalog + value for one system, plus your log row |
 | `find_search_backlog` | EDSM+journal | Systems near a reference you have not fully scanned (search backlog) |

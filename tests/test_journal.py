@@ -40,3 +40,30 @@ def test_missing_dir(tmp_path):
     missing = tmp_path / "nope"
     assert j.get_status(missing)["found"] is False
     assert j.get_location(missing)["found"] is False
+
+
+def test_stored_ships_here_and_remote(tmp_path):
+    evs = [
+        {"timestamp": "2026-01-01T00:00:00Z", "event": "StoredShips",
+         "StationName": "A", "StarSystem": "SysA",
+         "ShipsHere": [{"ShipID": 0, "ShipType": "Sidewinder", "Name": "P",
+                        "Value": 0}],
+         "ShipsRemote": [{"ShipID": 9, "ShipType": "Explorer_NX", "Name": "Cassy",
+                           "StarSystem": "SysB", "TransferPrice": 100,
+                           "TransferTime": 60, "Value": 5}]},
+        {"timestamp": "2026-01-02T00:00:00Z", "event": "StoredShips",
+         "StationName": "C", "StarSystem": "SysC",
+         "ShipsHere": [], "ShipsRemote": [
+             {"ShipID": 9, "ShipType": "Explorer_NX", "Name": "Cassy",
+              "StarSystem": "SysD", "TransferPrice": 200,
+              "TransferTime": 120, "Value": 5}]},
+    ]
+    p = tmp_path / "Journal.2026-01-01.log"
+    with open(p, "w", encoding="utf-8") as fh:
+        for ev in evs:
+            fh.write(json.dumps(ev) + "\n")
+    got = j.get_stored_ships(tmp_path)
+    assert got["found"] and got["count"] == 2
+    cassy = next(s for s in got["ships"] if s["name"] == "Cassy")
+    assert cassy["system"] == "SysD"  # latest sighting wins
+    assert cassy["transfer_price"] == 200 and cassy["here"] is False
