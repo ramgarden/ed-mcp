@@ -100,6 +100,10 @@ p = spansh.search_stations(
 2. New loop ⇒ test with a small quantity first (10t proves the price; 400t assumes it).
 3. Colony shopping: `get_colony_progress().remaining` ∩ docked-station `supply`, capped by `cargo.free_t`.
 4. Refuel rule: supply stations must be true starports (or in-system hops) within one tank leg.
+5. **Full system names everywhere.** Every station/system in every answer uses the complete
+   in-game name (`Col 359 Sector IZ-T a20-2`, never `IZ-T a20-2`; `R CrA Sector UE-Y b1-2`,
+   never `UE-Y b1-2`) so the player can paste it straight into the galaxy-map search.
+   Same for tool outputs and scripts: print `station @ FULL system`, never short names.
 
 ### Scratch scripts → service tools (when a custom script is needed)
 1. **Default to existing tools first.** Only hand-write a script when no MCP tool answers
