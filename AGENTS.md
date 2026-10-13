@@ -100,3 +100,18 @@ p = spansh.search_stations(
 2. New loop ⇒ test with a small quantity first (10t proves the price; 400t assumes it).
 3. Colony shopping: `get_colony_progress().remaining` ∩ docked-station `supply`, capped by `cargo.free_t`.
 4. Refuel rule: supply stations must be true starports (or in-system hops) within one tank leg.
+
+### Scratch scripts → service tools (when a custom script is needed)
+1. **Default to existing tools first.** Only hand-write a script when no MCP tool answers
+   the question (new join/filter/ranking over provider data).
+2. **Write it disposable:** single file in `C:\Users\ramga\AppData\Local\Temp\opencode\`
+   (never in the repo), run with `.venv/Scripts/python.exe`, delete after (`Remove-Item`).
+   Keep it read-only: query providers, print answer. Never mutate game state.
+3. **Promote if generic.** If the same question could recur (you'd run it twice), promote it:
+   - pure logic → `src/ed_mcp/logic/<domain>.py` (no I/O, unit-testable)
+   - thin MCP wrapper → `server.py` (calls providers, calls logic, returns JSON)
+   - offline unit tests → `tests/test_<domain>.py` (no network; fixture data only)
+   - docs → tool tables in `README.md` + `AGENTS.md`
+   - live-verify once against real data, then `commit + push`
+4. **Examples of past promotions:** `find_local_opportunities` (trade/mission/exobio
+   classifier), `get_colony_progress` (depot scoreboard + pace/ETA).
