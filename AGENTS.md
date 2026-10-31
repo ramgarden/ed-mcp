@@ -100,7 +100,12 @@ p = spansh.search_stations(
 2. New loop ⇒ test with a small quantity first (10t proves the price; 400t assumes it).
 3. Colony shopping: `get_colony_progress().remaining` ∩ docked-station `supply`, capped by `cargo.free_t`.
 4. Refuel rule: supply stations must be true starports (or in-system hops) within one tank leg.
-5. **Full system names everywhere.** Every station/system in every answer uses the complete
+5. **Pad-size check every time.** Before listing any market/station, confirm it has a pad the
+   player's CURRENT ship can use (`large_pads` > 0 for an Anaconda/Type-9 etc.; outposts ship
+   large-pad ships to Medium pads and cannot be used). Read the active ship from the journal
+   (`get_status().ship`) and filter with `large_pad_only=True`. Never put an outpost / 0-large-pad
+   station in a load list for a large ship, even if it stocks the commodity.
+6. **Full system names everywhere.** Every station/system in every answer uses the complete
    in-game name (`Col 359 Sector IZ-T a20-2`, never `IZ-T a20-2`; `R CrA Sector UE-Y b1-2`,
    never `UE-Y b1-2`) so the player can paste it straight into the galaxy-map search.
    Same for tool outputs and scripts: print `station @ FULL system`, never short names.

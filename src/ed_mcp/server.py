@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -16,6 +17,13 @@ from ed_mcp.providers import edsm as edsm_p
 from ed_mcp.providers import inara as inara_p
 from ed_mcp.providers import journal as journal_p
 from ed_mcp.providers import spansh as spansh_p
+from ed_mcp.research import artifact_store as research_store
+from ed_mcp.research import experiment as research_exp
+from ed_mcp.research import provenance as research_prov
+from ed_mcp.research import region as research_region
+from ed_mcp.logic import graph as graph_logic
+from ed_mcp.logic import spatial as spatial_logic
+from ed_mcp.logic import temporal as temporal_logic
 
 mcp = FastMCP("ed-mcp")
 
@@ -781,6 +789,741 @@ def raxxla_survey() -> str:
             "counts, backlog table (system, distance, your grade, EDSM bodies), "
             "and the caveat that absence from journals/EDSM never proves a "
             "system hides anything. Never invent Raxxla's location.")
+
+
+# ---- research foundations (Milestone 1) ----
+@mcp.tool()
+def create_experiment(
+    title: str,
+    hypothesis: str,
+    method: str,
+    parameters: dict[str, Any] | None = None,
+    control_design: str | None = None,
+) -> dict[str, Any]:
+    """Define a bounded scientific experiment with provenance tracking.
+
+    Creates an experiment definition that can be tracked with runs,
+    results, and controls. Parameters and control design should be
+    minimal and deterministic.
+    """
+    try:
+        exp = research_exp.Experiment.create(
+            title=title,
+            hypothesis=hypothesis,
+            method=method,
+            parameters=parameters or {},
+            control_design=control_design,
+        )
+        # Initialize store if not present; use default DB path
+        db_path = cfg.SETTINGS.journal_dir / "research_artifacts.db" if cfg.SETTINGS.journal_dir else Path(
+            "research_artifacts.db"
+        )
+        if not db_path.exists():
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            research_store.ArtifactStore(db_path)  # creates schema
+        else:
+            research_store.ArtifactStore(db_path)
+        store = research_store.ArtifactStore(db_path)
+        store.save_experiment(exp)
+        return {
+            "ok": True,
+            "experiment_id": exp.experiment_id,
+            "title": exp.title,
+            "hypothesis": exp.hypothesis,
+            "method": exp.method,
+            "method_version": exp.method_version,
+            "parameters": exp.parameters,
+            "control_design": exp.control_design,
+            "status": exp.status,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def run_experiment(
+    experiment_id: str,
+    bounded_inputs: dict[str, Any] | None = None,
+    random_seed: int | None = None,
+) -> dict[str, Any]:
+    """Create a new run of a bounded scientific experiment.
+
+    Records the run start time, software version, model/provider metadata
+    if applicable, and optional random seed. The agent should invoke
+    approved MCP tools to populate results, then call complete_experiment.
+    """
+    try:
+        exp_store = research_store.ArtifactStore(
+            Path("research_artifacts.db") if not cfg.SETTINGS.journal_dir
+            else Path(cfg.SETTINGS.journal_dir / "research_artifacts.db")
+        )
+        run = research_exp.ExperimentRun.create(
+            experiment_id=experiment_id,
+            random_seed=random_seed,
+            software_version="ed-mcp/0.1.0",
+        )
+        exp_store.save_run(run)
+        run_dict = run.to_dict()
+        run_dict["experiment_id"] = experiment_id
+        return {"ok": True, "run": run_dict}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def complete_experiment(
+    run_id: str,
+    result_summary: dict[str, Any] | None = None,
+    error_message: str | None = None,
+) -> dict[str, Any]:
+    """Mark an experiment run as complete with results or error.
+
+    Records completion time, result summary, and any error message.
+    The agent should have gathered results from approved MCP tools
+    before calling this.
+    """
+    try:
+        exp_store = research_store.ArtifactStore(
+            Path("research_artifacts.db") if not cfg.SETTINGS.journal_dir
+            else Path(cfg.SETTINGS.journal_dir / "research_artifacts.db")
+        )
+        run_store = research_store.ArtifactStore(
+            Path("research_artifacts.db") if not cfg.SETTINGS.journal_dir
+            else Path(cfg.SETTINGS.journal_dir / "research_artifacts.db")
+        )
+        existing = exp_store.get_run(run_id)
+        if existing is None:
+            return {"ok": False, "error": f"Run {run_id} not found"}
+        completed = existing.complete(
+            result_summary=result_summary,
+            error_message=error_message,
+        )
+        exp_store.save_run(completed)
+        return {
+            "ok": True,
+            "run_id": completed.run_id,
+            "experiment_id": completed.experiment_id,
+            "status": completed.status,
+            "start_time_utc": completed.start_time_utc,
+            "end_time_utc": completed.end_time_utc,
+            "result_summary": completed.result_summary,
+            "error_message": completed.error_message,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def save_observation(
+    source: str,
+    system_name: str | None = None,
+    source_record_id: str | None = None,
+    coordinates: tuple[float, float, float] | None = None,
+    coordinate_reference: str | None = None,
+    data_type: str | None = None,
+    source_schema_version: str | None = None,
+    raw_payload: dict[str, Any] | None = None,
+    query_parameters: dict[str, Any] | None = None,
+    pagination_cursor: str | None = None,
+    completeness_notes: str | None = None,
+) -> dict[str, Any]:
+    """Save a provenance-tracked source observation to the research store.
+
+    All missing data is explicitly marked rather than silently converted.
+    Returns the observation ID and provenance summary.
+    """
+    try:
+        db_path = Path("research_artifacts.db") if not cfg.SETTINGS.journal_dir else Path(
+            cfg.SETTINGS.journal_dir / "research_artifacts.db"
+        )
+        store = research_store.ArtifactStore(db_path)
+        prov = research_prov.Provenance.create(
+            source=source,
+            source_record_id=source_record_id,
+            system_name=system_name,
+            coordinates=coordinates,
+            coordinate_reference=coordinate_reference,
+            data_type=data_type,
+            source_schema_version=source_schema_version,
+            raw_payload=raw_payload,
+            query_parameters=query_parameters,
+            pagination_cursor=pagination_cursor,
+            completeness_notes=completeness_notes,
+        )
+        obs = research_prov.Observation(
+            provenance=prov,
+            value=raw_payload,
+            is_missing=coordinates is None,
+            missing_reason=coordinate_reference if coordinates is None else None,
+        )
+        obs_id = store.save_observation(obs)
+        return {
+            "ok": True,
+            "observation_id": obs_id,
+            "source": prov.source,
+            "system_name": prov.system_name,
+            "is_missing": obs.is_missing,
+            "missing_reason": obs.missing_reason,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def get_experiment_result(
+    run_id: str,
+) -> dict[str, Any]:
+    """Retrieve a completed experiment run's results with full provenance.
+
+    Returns the stored run with result summary, provenance observations,
+    and metadata.
+    """
+    try:
+        db_path = Path("research_artifacts.db") if not cfg.SETTINGS.journal_dir else Path(
+            cfg.SETTINGS.journal_dir / "research_artifacts.db"
+        )
+        store = research_store.ArtifactStore(db_path)
+        run = store.get_run(run_id)
+        if run is None:
+            return {"ok": False, "error": f"Run {run_id} not found"}
+        return {
+            "ok": True,
+            "run_id": run.run_id,
+            "experiment_id": run.experiment_id,
+            "start_time_utc": run.start_time_utc,
+            "end_time_utc": run.end_time_utc,
+            "status": run.status,
+            "software_version": run.software_version,
+            "model_provider": run.model_provider,
+            "model_identifier": run.model_identifier,
+            "random_seed": run.random_seed,
+            "result_summary": run.result_summary,
+            "error_message": run.error_message,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def list_experiment_runs(
+    experiment_id: str | None = None,
+) -> dict[str, Any]:
+    """List all runs for an experiment (or all experiments).
+
+    Returns run summaries ordered by start time descending.
+    """
+    try:
+        db_path = Path("research_artifacts.db") if not cfg.SETTINGS.journal_dir else Path(
+            cfg.SETTINGS.journal_dir / "research_artifacts.db"
+        )
+        store = research_store.ArtifactStore(db_path)
+        runs = store.list_runs(experiment_id=experiment_id)
+        return {
+            "ok": True,
+            "runs": [r.to_dict() for r in runs],
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def list_observations(
+    source: str | None = None,
+    system_name: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """List provenance-tracked observations with filtering.
+
+    Filters by source and/or system name. Never silently converts missing
+    values; all observations retain their missing/observed status.
+    """
+    try:
+        db_path = Path("research_artifacts.db") if not cfg.SETTINGS.journal_dir else Path(
+            cfg.SETTINGS.journal_dir / "research_artifacts.db"
+        )
+        store = research_store.ArtifactStore(db_path)
+        obs_list = store.list_observations(source=source, system_name=system_name, limit=limit)
+        return {
+            "ok": True,
+            "observations": [
+                {
+                    "observation_id": i,
+                    "source": o.provenance.source,
+                    "system_name": o.provenance.system_name,
+                    "is_missing": o.is_missing,
+                    "missing_reason": o.missing_reason,
+                    "retrieval_timestamp_utc": o.provenance.retrieval_timestamp_utc,
+                    "observation_type": o.provenance.observation_type,
+                    "value_summary": (
+                        str(list(o.value or {}).keys())[:20] if o.value is not None else None
+                    ),
+                }
+                for i, o in enumerate(obs_list)
+            ],
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def query_bounded_region(
+    system_name: str | None = None,
+    x: float | None = None,
+    y: float | None = None,
+    z: float | None = None,
+    radius_ly: float = 15.0,
+) -> dict[str, Any]:
+    """Query a bounded EDSM sphere region with full provenance tracking.
+
+    Caps results at 200 systems to keep responses bounded. Systems missing
+    coordinates are explicitly marked rather than silently dropped. Returns
+    region metadata, system list with provenance, and any errors.
+    """
+    try:
+        db_path = Path("research_artifacts.db") if not cfg.SETTINGS.journal_dir else Path(
+            cfg.SETTINGS.journal_dir / "research_artifacts.db"
+        )
+        store = research_store.ArtifactStore(db_path)
+        result = research_region.query_region(
+            system_name=system_name,
+            x=x,
+            y=y,
+            z=z,
+            radius_ly=radius_ly,
+            store=store,
+        )
+        return {
+            "ok": result.ok,
+            "center_system": result.center_system,
+            "center_coords": result.center_coords,
+            "radius_ly": result.radius_ly,
+            "systems": [
+                {
+                    "name": s["name"],
+                    "coords": s.get("coords"),
+                    "distance": s.get("distance"),
+                    "bodyCount": s.get("bodyCount"),
+                    "information": s.get("information"),
+                    "_provenance": s.get("_provenance"),
+                    "is_missing": s.get("is_missing", False),
+                    "missing_reason": s.get("missing_reason"),
+                }
+                for s in result.systems
+            ],
+            "count": result.count,
+            "errors": result.errors,
+            "provenance": [p.to_dict() for p in result.provenance],
+            "query_parameters": result.query_parameters,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+# ---- graph analysis (Milestone 2) ----
+@mcp.tool()
+def build_system_graph(
+    system_name: str | None = None,
+    x: float | None = None,
+    y: float | None = None,
+    z: float | None = None,
+    radius_ly: float = 15.0,
+    max_edge_distance: float = 30.0,
+    graph_definition: str = "jump_range_proximity",
+) -> dict[str, Any]:
+    """Build a jump-range proximity graph for a bounded EDSM sphere.
+
+    Queries EDSM for systems within radius_ly, then constructs edges
+    between all pairs within max_edge_distance. Returns graph snapshot
+    with nodes, edges, and metadata. Missing coordinates are preserved
+    as isolated nodes with explicit missing flags.
+    """
+    try:
+        systems = edsm_p.sphere_systems(
+            system_name=system_name,
+            x=x,
+            y=y,
+            z=z,
+            radius_ly=radius_ly,
+        )
+        snap = graph_logic.GraphSnapshot.build(
+            systems=systems,
+            max_edge_distance=max_edge_distance,
+            graph_definition=graph_definition,
+            source_snapshot_id=None,
+        )
+        return {"ok": True, "graph": snap.to_dict()}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def analyze_graph_metrics(
+    system_name: str | None = None,
+    x: float | None = None,
+    y: float | None = None,
+    z: float | None = None,
+    radius_ly: float = 15.0,
+    max_edge_distance: float = 30.0,
+    graph_definition: str = "jump_range_proximity",
+) -> dict[str, Any]:
+    """Build a graph and compute structural metrics in one call.
+
+    Returns: connected components, degree distribution, bridges,
+    articulation points, betweenness centrality, and motif counts.
+    """
+    try:
+        systems = edsm_p.sphere_systems(
+            system_name=system_name,
+            x=x,
+            y=y,
+            z=z,
+            radius_ly=radius_ly,
+        )
+        snap = graph_logic.GraphSnapshot.build(
+            systems=systems,
+            max_edge_distance=max_edge_distance,
+            graph_definition=graph_definition,
+        )
+        return {
+            "ok": True,
+            "graph_definition": graph_definition,
+            "max_edge_distance": max_edge_distance,
+            "connected_components": graph_logic.connected_components(snap),
+            "degree_distribution": graph_logic.degree_distribution(snap),
+            "bridges_articulation": graph_logic.bridges_and_articulation_points(snap),
+            "betweenness_centrality": graph_logic.betweenness_centrality(snap),
+            "motif_counts": graph_logic.motif_counts(snap),
+            "graph_metadata": {
+                "node_count": snap.node_count,
+                "edge_count": snap.edge_count,
+                "missing_coordinates": snap.missing_coordinates,
+            },
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def graph_sensitivity_analysis(
+    system_name: str | None = None,
+    x: float | None = None,
+    y: float | None = None,
+    z: float | None = None,
+    radius_ly: float = 15.0,
+    radii: list[float] | None = None,
+    graph_definition: str = "jump_range_proximity",
+) -> dict[str, Any]:
+    """Run graph construction across multiple jump-range radii.
+
+    Returns per-radius metrics for parameter sensitivity testing.
+    """
+    try:
+        systems = edsm_p.sphere_systems(
+            system_name=system_name,
+            x=x,
+            y=y,
+            z=z,
+            radius_ly=radius_ly,
+        )
+        radii_list = radii or [15.0, 20.0, 30.0, 40.0, 50.0]
+        results = graph_logic.sensitivity_analysis(
+            systems=systems,
+            radii=radii_list,
+            graph_definition=graph_definition,
+        )
+        return {"ok": True, "radius_ly": radius_ly, "sensitivity": results}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+# ---- spatial analysis (Milestone 3) ----
+@mcp.tool()
+def find_spatial_clusters(
+    system_name: str | None = None,
+    x: float | None = None,
+    y: float | None = None,
+    z: float | None = None,
+    radius_ly: float = 15.0,
+    eps_ly: float = 50.0,
+    min_samples: int = 3,
+) -> dict[str, Any]:
+    """Find DBSCAN spatial clusters in a bounded EDSM sphere.
+
+    Queries EDSM for systems within radius_ly, extracts coordinates,
+    then runs DBSCAN with eps_ly and min_samples. Returns clusters,
+    noise points, and per-point assignments. Systems without
+    coordinates are excluded from clustering but noted.
+    """
+    try:
+        systems = edsm_p.sphere_systems(
+            system_name=system_name,
+            x=x,
+            y=y,
+            z=z,
+            radius_ly=radius_ly,
+        )
+        # Extract points with valid coordinates
+        points = []
+        missing_coords = 0
+        for s in systems:
+            coords = s.get("coords")
+            if coords:
+                try:
+                    coord_tuple = (
+                        float(coords.get("x", coords[0]) if isinstance(coords, dict) else coords[0]),
+                        float(coords.get("y", coords[1]) if isinstance(coords, dict) else coords[1]),
+                        float(coords.get("z", coords[2]) if isinstance(coords, dict) else coords[2]),
+                    )
+                    points.append(
+                        spatial_logic.SpatialPoint(
+                            system_name=s.get("name", ""),
+                            coordinates=coord_tuple,
+                        )
+                    )
+                except (TypeError, ValueError, IndexError):
+                    missing_coords += 1
+            else:
+                missing_coords += 1
+
+        result = spatial_logic.dbscan(points=points, eps_ly=eps_ly, min_samples=min_samples)
+        result["missing_coordinates"] = missing_coords
+        result["total_systems"] = len(systems)
+        return {"ok": True, **result}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def analyze_spatial_geometry(
+    system_name: str | None = None,
+    x: float | None = None,
+    y: float | None = None,
+    z: float | None = None,
+    radius_ly: float = 15.0,
+) -> dict[str, Any]:
+    """Analyze geometric structure of systems in a bounded EDSM sphere.
+
+    Computes linearity, planarity, spread, centroid, compactness,
+    and nearest-neighbor statistics to identify linear arrangements,
+    planar structures, or spherical clusters.
+    """
+    try:
+        systems = edsm_p.sphere_systems(
+            system_name=system_name,
+            x=x,
+            y=y,
+            z=z,
+            radius_ly=radius_ly,
+        )
+        points = []
+        missing_coords = 0
+        for s in systems:
+            coords = s.get("coords")
+            if coords:
+                try:
+                    coord_tuple = (
+                        float(coords.get("x", coords[0]) if isinstance(coords, dict) else coords[0]),
+                        float(coords.get("y", coords[1]) if isinstance(coords, dict) else coords[1]),
+                        float(coords.get("z", coords[2]) if isinstance(coords, dict) else coords[2]),
+                    )
+                    points.append(
+                        spatial_logic.SpatialPoint(
+                            system_name=s.get("name", ""),
+                            coordinates=coord_tuple,
+                        )
+                    )
+                except (TypeError, ValueError, IndexError):
+                    missing_coords += 1
+            else:
+                missing_coords += 1
+
+        geometry = spatial_logic.analyze_geometry(points)
+        nn_stats = spatial_logic.nearest_neighbor_stats(points)
+        return {
+            "ok": True,
+            "geometry": {
+                "dominant_axis": geometry.dominant_axis,
+                "linearity": geometry.linearity,
+                "planarity": geometry.planarity,
+                "spread": geometry.spread,
+                "centroid": geometry.centroid,
+                "compactness": geometry.compactness,
+            },
+            "nearest_neighbor": nn_stats,
+            "point_count": len(points),
+            "missing_coordinates": missing_coords,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def spatial_sensitivity_analysis(
+    system_name: str | None = None,
+    x: float | None = None,
+    y: float | None = None,
+    z: float | None = None,
+    radius_ly: float = 15.0,
+    eps_values: list[float] | None = None,
+    min_samples_values: list[int] | None = None,
+) -> dict[str, Any]:
+    """Run DBSCAN across parameter combinations for sensitivity testing.
+
+    Returns per-parameter-set cluster counts, noise counts, and cluster
+    details to assess robustness of spatial patterns.
+    """
+    try:
+        systems = edsm_p.sphere_systems(
+            system_name=system_name,
+            x=x,
+            y=y,
+            z=z,
+            radius_ly=radius_ly,
+        )
+        points = []
+        for s in systems:
+            coords = s.get("coords")
+            if coords:
+                try:
+                    coord_tuple = (
+                        float(coords.get("x", coords[0]) if isinstance(coords, dict) else coords[0]),
+                        float(coords.get("y", coords[1]) if isinstance(coords, dict) else coords[1]),
+                        float(coords.get("z", coords[2]) if isinstance(coords, dict) else coords[2]),
+                    )
+                    points.append(
+                        spatial_logic.SpatialPoint(
+                            system_name=s.get("name", ""),
+                            coordinates=coord_tuple,
+                        )
+                    )
+                except (TypeError, ValueError, IndexError):
+                    pass
+        results = spatial_logic.spatial_sensitivity_analysis(
+            points=points,
+            eps_values=eps_values,
+            min_samples_values=min_samples_values,
+        )
+        return {"ok": True, "sensitivity": results, "point_count": len(points)}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+# ---- temporal analysis (Milestone 4) ----
+@mcp.tool()
+def aggregate_temporal_events(
+    events: list[dict[str, Any]],
+    interval_minutes: int = 60,
+    system_name: str | None = None,
+    event_types: list[str] | None = None,
+) -> dict[str, Any]:
+    """Aggregate timestamped EDDN/journal events into a time series.
+
+    Returns intervals with event-type counts. Systems without timestamps
+    are skipped (not silently converted to zero).
+    """
+    try:
+        result = temporal_logic.aggregate_time_series(
+            events=events,
+            interval_minutes=interval_minutes,
+            system_name=system_name,
+            event_types=event_types,
+        )
+        return {"ok": True, **result}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def detect_temporal_outliers(
+    series: dict[str, dict[str, int]],
+    interval: str,
+    method: str = "IQR",
+    z_threshold: float = 3.0,
+) -> dict[str, Any]:
+    """Robust outlier detection on event counts for a given interval.
+
+    Methods: 'IQR' (interquartile range) or 'zscore' (standard deviations).
+    Returns per-event-type outlier flags and statistics.
+    """
+    try:
+        result = temporal_logic.robust_outlier_detection(
+            series=series,
+            interval=interval,
+            method=method,
+            z_threshold=z_threshold,
+        )
+        return {"ok": True, "interval": interval, "outliers": result}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def detect_change_points(
+    series: dict[str, dict[str, int]],
+    interval: str,
+    window_size: int = 5,
+    sensitivity: float = 1.5,
+) -> dict[str, Any]:
+    """Detect change points using sliding window mean comparison.
+
+    Compares early vs late window means; flags changes exceeding
+    sensitivity * MAD. Works on per-event-type time series.
+    """
+    try:
+        result = temporal_logic.change_point_detection(
+            series=series,
+            interval=interval,
+            window_size=window_size,
+            sensitivity=sensitivity,
+        )
+        return {"ok": True, "interval": interval, "change_points": result}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def normalize_temporal_activity(
+    series: dict[str, dict[str, int]],
+    accessibility_data: dict[str, dict[str, Any]] | None = None,
+    method: str = "traffic_normalized",
+) -> dict[str, Any]:
+    """Normalize activity counts by accessibility/traffic indicators.
+
+    Methods: 'traffic_normalized', 'population_normalized', 'raw'.
+    Returns normalized series with caveats for missing data.
+    """
+    try:
+        result = temporal_logic.normalize_activity_by_accessibility(
+            series=series,
+            accessibility_data=accessibility_data,
+            method=method,
+        )
+        return {"ok": True, "normalized_series": result}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def check_temporal_persistence(
+    series1: dict[str, dict[str, int]],
+    series2: dict[str, dict[str, int]],
+    interval: str,
+    min_overlap: float = 0.5,
+) -> dict[str, Any]:
+    """Check persistence of anomalous patterns across two time windows.
+
+    Returns per-event-type persistence flags with relative proportion change.
+    """
+    try:
+        result = temporal_logic.persistence_check(
+            series1=series1,
+            series2=series2,
+            interval=interval,
+            min_overlap=min_overlap,
+        )
+        return {"ok": True, "interval": interval, "persistence": result}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
 
 
 def main() -> None:

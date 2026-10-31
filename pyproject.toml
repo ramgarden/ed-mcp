@@ -1,6 +1,6 @@
 [project]
 name = "ed-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Elite Dangerous MCP service: plain-English queries over local journals, EDDN, EDSM/Inara/Spansh data."
 readme = "README.md"
 requires-python = ">=3.10"
