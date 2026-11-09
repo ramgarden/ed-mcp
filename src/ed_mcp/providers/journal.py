@@ -464,3 +464,144 @@ def get_colony_progress(journal_dir: Path | str | None = None) -> dict[str, Any]
                                           now_iso=latest_ts or None)
     out["journal_dir"] = str(jdir)
     return out
+
+
+def get_exobiology_samples(
+    journal_dir: Path | str | None = None,
+    system_name: str | None = None,
+) -> dict[str, Any]:
+    """Exobiology sample status from local journals + EDSM estimated values.
+
+    Returns per-system (or single system) exobiology data:
+    - FSS complete (all bodies found = samples discoverable)
+    - Organic scans logged (ScanOrganic events)
+    - DSS mapped bodies (SAAScanComplete)
+    - Estimated turn-in value from EDSM (when FSS complete)
+    - Community-discovered flag (FSSAllBodiesFound seen in journals OR EDSM bodyCount > 0)
+
+    If system_name is provided, returns data for that system only.
+    Otherwise returns all systems with exobiology activity.
+    """
+    from ed_mcp.providers import edsm as edsm_p
+    jdir = Path(journal_dir) if journal_dir else resolve_journal_dir()
+    if not jdir.exists():
+        return {"found": False, "journal_dir": str(jdir)}
+
+    # Collect exobiology-related events
+    fss_complete: dict[str, dict[str, Any]] = {}
+    organic_scans: dict[str, list[dict[str, Any]]] = {}
+    dss_mapped: dict[str, int] = {}
+    visits: dict[str, int] = {}
+
+    for ev in _iter_events(jdir):
+        name = ev.get("event")
+        sys = ev.get("StarSystem") or ev.get("SystemName") or ev.get("System")
+        if not sys:
+            continue
+
+        if name == "FSDJump" or name == "Location" or name == "Docked" or name == "SupercruiseExit":
+            visits[sys] = visits.get(sys, 0) + 1
+
+        elif name == "FSSAllBodiesFound":
+            # Full system scan complete = all bodies found, exobiology samples available
+            fss_complete[sys] = {
+                "timestamp": ev.get("timestamp"),
+                "body_count": ev.get("BodyCount"),
+                "progress": 1.0,
+            }
+
+        elif name == "ScanOrganic":
+            # Organic life scanned
+            if sys not in organic_scans:
+                organic_scans[sys] = []
+            organic_scans[sys].append({
+                "body": ev.get("BodyName"),
+                "genus": ev.get("Genus"),
+                "species": ev.get("Species"),
+                "variant": ev.get("Variant"),
+                "was_logged": ev.get("WasLogged", False),
+                "timestamp": ev.get("timestamp"),
+            })
+
+        elif name == "SAAScanComplete":
+            # Detailed Surface Scanner complete
+            dss_mapped[sys] = dss_mapped.get(sys, 0) + 1
+
+    # If filtering to one system, only process that one
+    systems_to_process = [system_name] if system_name else list(
+        set(list(fss_complete.keys()) + list(organic_scans.keys()) + list(dss_mapped.keys()) + list(visits.keys()))
+    )
+
+    results = []
+    for sys in systems_to_process:
+        if not sys:
+            continue
+
+        fss = fss_complete.get(sys, {})
+        organics = organic_scans.get(sys, [])
+        dss = dss_mapped.get(sys, 0)
+        visit_count = visits.get(sys, 0)
+
+        # Determine status
+        has_fss_complete = sys in fss_complete
+        has_organics = len(organics) > 0
+        has_dss = dss > 0
+        has_visits = visit_count > 0
+
+        if has_fss_complete:
+            status = "FSS_COMPLETE"
+        elif has_organics:
+            status = "ORGANICS_FOUND"
+        elif has_dss:
+            status = "DSS_MAPPED"
+        elif has_visits:
+            status = "VISITED"
+        else:
+            status = "UNKNOWN"
+
+        # Community discovered: FSSAllBodiesFound in journals OR EDSM has body data
+        community_discovered = has_fss_complete
+
+        # Get EDSM estimated value if FSS complete
+        estimated_value = None
+        if has_fss_complete or (not system_name and has_visits):
+            try:
+                value_data = edsm_p.system_estimated_value(sys)
+                if isinstance(value_data, dict) and "estimatedValue" in value_data:
+                    estimated_value = value_data["estimatedValue"]
+                elif isinstance(value_data, (int, float)):
+                    estimated_value = value_data
+            except Exception:
+                estimated_value = None
+
+        # Also check EDSM for body catalog (community discovery proxy)
+        edsm_body_count = None
+        if not community_discovered:
+            try:
+                catalog = edsm_p.system_bodies(sys)
+                bodies = catalog.get("bodies", []) if isinstance(catalog, dict) else []
+                if bodies:
+                    community_discovered = True
+                    edsm_body_count = len(bodies)
+            except Exception:
+                pass
+
+        result = {
+            "system": sys,
+            "status": status,
+            "fss_complete": has_fss_complete,
+            "fss_timestamp": fss.get("timestamp"),
+            "fss_body_count": fss.get("body_count"),
+            "organic_scans": organics,
+            "organic_count": len(organics),
+            "dss_mapped_count": dss,
+            "visit_count": visit_count,
+            "community_discovered": community_discovered,
+            "edsm_body_count": edsm_body_count,
+            "estimated_turn_in_credits": estimated_value,
+        }
+        results.append(result)
+
+    if system_name:
+        return {"found": True, "system": system_name, "data": results[0] if results else None}
+    return {"found": True, "journal_dir": str(jdir), "count": len(results), "samples": results}

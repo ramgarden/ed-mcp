@@ -274,6 +274,96 @@ TRADE_ECONOMIES = {"industrial", "refinery", "high tech", "extraction",
                    "agriculture", "tourism", "service"}
 
 
+#: Bio types with exobiology sample value multipliers (turn-in credits).
+BIOLOGY_VALUE_MULTIPLIERS = {
+    "archaea": 1.5, "thermophiles": 1.8, "cyanobacteria": 1.2,
+    "extremophile": 2.0, "keystone": 2.5, "deep_ocean": 3.0,
+    "water_world": 2.2, "ammonia": 1.6, "life": 1.0, "organism": 1.0,
+}
+
+
+def organism_value_multiplier(biology_type: str | None) -> float:
+    """Turn-in credit multiplier for a biology type (pure).
+
+    Higher multiplier = more valuable sample. Unknown types default to 1.0.
+    """
+    key = str(biology_type or "").lower().replace(" ", "_").replace("-", "_")
+    for lookup, mult in BIOLOGY_VALUE_MULTIPLIERS.items():
+        if lookup in key or key in lookup:
+            return mult
+    return 1.0
+
+
+def find_organic_bodies(bodies: list[dict[str, Any]],
+                       organic_only: bool = True) -> list[dict[str, Any]]:
+    """Filter a Spansh /bodies/search payload to organic-life bodies.
+
+    organic_only=True drops landable-but-terraforming-only entries and
+    surfaces bodies flagged as biology-rich. Pure, testable.
+    """
+    out: list[dict[str, Any]] = []
+    for b in bodies or []:
+        if not isinstance(b, dict):
+            continue
+        sub_type = str(b.get("sub_type") or b.get("type") or "").lower()
+        is_landable = bool(b.get("is_landable"))
+        # Treat explicit organic markers or landable biology worlds as organic
+        organic = is_landable or "organic" in sub_type or "bio" in sub_type or "life" in sub_type
+        if organic_only and not organic:
+            continue
+        out.append({
+            "body": b.get("name"),
+            "system": b.get("system_name"),
+            "distance_ly": b.get("distance"),
+            "distance_to_arrival_ls": b.get("distance_to_arrival"),
+            "type": sub_type,
+            "earth_masses": b.get("earth_masses"),
+            "estimated_value": b.get("estimated_value") or b.get("estimated_map_value"),
+            "is_landable": is_landable,
+            "terraforming": b.get("terraforming_state") or b.get("terraform_state"),
+            "organic": organic,
+            "multiplier": organism_value_multiplier(sub_type),
+        })
+    return out
+
+
+def rank_organic_systems(organic_bodies: list[dict[str, Any]],
+                         per_system_limit: int = 3) -> dict[str, Any]:
+    """Rank systems by summed exobiology value of their organic bodies (pure).
+
+    Groups bodies by system, sums estimated value * multiplier, returns
+    top systems with per-system turn-in estimate and body breakdown.
+    """
+    by_system: dict[str, dict[str, Any]] = {}
+    for b in organic_bodies or []:
+        sys = str(b.get("system") or "")
+        if not sys:
+            continue
+        row = by_system.setdefault(sys, {
+            "system": sys, "bodies": [], "total_estimated_value": 0.0,
+            "total_turn_in_credits": 0.0, "max_multiplier": 1.0,
+        })
+        val = float(b.get("estimated_value") or 0.0)
+        mult = float(b.get("multiplier") or 1.0)
+        row["bodies"].append(b)
+        row["total_estimated_value"] += val
+        row["total_turn_in_credits"] += val * mult
+        row["max_multiplier"] = max(row["max_multiplier"], mult)
+
+    systems = sorted(by_system.values(),
+                     key=lambda r: -r["total_turn_in_credits"])[:per_system_limit]
+    out = []
+    for r in systems:
+        out.append({
+            "system": r["system"],
+            "bodies": r["bodies"],
+            "estimated_value": r["total_estimated_value"],
+            "turn_in_credits": r["total_turn_in_credits"],
+            "body_count": len(r["bodies"]),
+        })
+    return {"organic_systems": out, "count": len(out)}
+
+
 def classify_systems(systems: list[dict[str, Any]],
                      max_each: int = 10) -> dict[str, Any]:
     """Group an EDSM sphere into money-making buckets (pure, testable).

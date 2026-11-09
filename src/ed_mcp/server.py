@@ -257,7 +257,50 @@ def build_cargo_shopping_list(journal_dir: str | None = None,
     return result
 
 
-# ---- local journals: cargo/market/fleet/wallet/odyssey ----
+# ---- local journals: exobiology + cargo/market/fleet/wallet/odyssey ----
+@mcp.tool()
+def find_exobiology_targets(system_name: str | None = None,
+                            x: float | None = None, y: float | None = None,
+                            z: float | None = None,
+                            radius_ly: float = 50.0,
+                            max_results: int = 20,
+                            journal_dir: str | None = None) -> dict[str, Any]:
+    """Best exobiology targets near you: organic-rich systems with estimated turn-in.
+
+    Uses Spansh bodies search for organic-life bodies, ranks systems by
+    estimated turn-in credits (body value x biology multiplier). Returns
+    per-system body breakdown with distance and estimated value.
+    """
+    try:
+        _, ref = _ref_coords(system_name, x, y, z, journal_dir)
+        sorts = [{"distance": {"direction": "asc", "distance": ref}}]
+        payload = spansh_p.search_bodies(
+            filters={}, sorts=sorts, page=1, size=min(max(radius_ly, 10), 200))
+        organic = trade_logic.find_organic_bodies(payload.get("results", []))
+        ranked = trade_logic.rank_organic_systems(organic, per_system_limit=max_results)
+        return {"ok": True, "ref": ref, "radius_ly": radius_ly,
+                "bodies_found": len(organic), **ranked,
+                "note": "Spansh body snapshots; verify in-game before flying."}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def get_exobiology_samples(journal_dir: str | None = None,
+                           system_name: str | None = None) -> dict[str, Any]:
+    """Exobiology sample status: discovery, FSS progress, estimated turn-in credits.
+
+    Reads local journals for FSSAllBodiesFound / ScanOrganic / SAAScanComplete
+    events. When FSS complete, uses EDSM estimated system value for turn-in credits.
+    community_discovered=True means FSS complete OR EDSM has catalogued bodies (others
+    discovered before you).
+    """
+    try:
+        return {"ok": True, **journal_p.get_exobiology_samples(journal_dir, system_name)}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
 @mcp.tool()
 def get_cargo_hold(journal_dir: str | None = None) -> dict[str, Any]:
     """Current cargo manifest + rack capacity + free space (Cargo.json + Loadout)."""

@@ -53,6 +53,8 @@ Claude / LLM client  <--MCP (stdio)-->  ed-mcp server
 | `spansh_search_bodies` | Spansh | Exploration search over bodies (Earth-likes, values, landables) |
 | `system_distance` | EDSM | LY distance + jump estimate between two systems |
 | `find_local_opportunities` | EDSM | Trade hubs + mission ports + exobio frontier near you |
+| `get_exobiology_samples` | journal+EDSM | Exobiology status: FSS complete, organic scans, DSS mapped, community-discovered, estimated turn-in credits |
+| `find_exobiology_targets` | Spansh | Organic-rich body search near you + per-system turn-in credit ranking |
 | `inara_search_nearest` | Inara | Nearest stations/components via Inara API (needs key) |
 | `inara_website_search` | Inara web | Search links + page check, no key (bot-limited, open in browser) |
 | `eddn_live_sample` | EDDN | Sample N live EDDN messages from the relay (commodity/outfitting/shipyard) |
