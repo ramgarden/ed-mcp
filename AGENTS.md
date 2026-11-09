@@ -25,6 +25,8 @@ The MCP server is configured in the global OpenCode config at `~/.config/opencod
 | `edsm_system_info` | Population, government, claimable check |
 | `system_distance` | LY distance + jumps between systems |
 | `find_local_opportunities` | Trade/mission/exobio buckets near you |
+| `get_exobiology_samples` | Exobiology sample status: FSS complete, organic scans, DSS mapped, estimated turn-in credits, community-discovered flag |
+| `find_exobiology_targets` | Organic-rich body search near you + per-system turn-in credit ranking |
 | `spansh_find_nearby_stations` | Stations near coords |
 | `spansh_query_systems` | Flexible system search |
 | `spansh_search_stations` | Full stations search passthrough |
@@ -123,4 +125,5 @@ p = spansh.search_stations(
    - docs → tool tables in `README.md` + `AGENTS.md`
    - live-verify once against real data, then `commit + push`
 4. **Examples of past promotions:** `find_local_opportunities` (trade/mission/exobio
-   classifier), `get_colony_progress` (depot scoreboard + pace/ETA).
+    classifier), `get_colony_progress` (depot scoreboard + pace/ETA), `get_exobiology_samples`
+    (exobiology sample discovery) |
