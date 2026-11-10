@@ -120,7 +120,12 @@ def match_module(results: list[dict[str, Any]], query: str,
 
 
 def match_ship(results: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
-    """Stations whose shipyard lists the named ship."""
+    """Stations whose shipyard lists the named ship.
+
+    Each hit carries `price` if available from Spansh, and a note about
+    verifying the price in-game (discounts are often time-limited and not
+    exposed in the public Spansh API).
+    """
     want = query.strip().lower()
     out: list[dict[str, Any]] = []
     for r in results:
@@ -132,7 +137,8 @@ def match_ship(results: list[dict[str, Any]], query: str) -> list[dict[str, Any]
             out.append({"station": r.get("name"), "system": r.get("system_name"),
                         "distance_ly": r.get("distance"),
                         "shipyard_updated_at": r.get("shipyard_updated_at"),
-                        "matches": hits[:10]})
+                        "matches": hits[:10],
+                        "price_note": "Verify ship price in-game — discounts are often time-limited and not reflected in Spansh snapshots."})
     return sorted(out, key=lambda h: h["distance_ly"] or 9999)
 
 

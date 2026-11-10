@@ -58,7 +58,8 @@ def _iter_events(journal_dir: Path):
 RELEVANT_EVENTS = {
     "LoadGame", "Location", "FSDJump", "Docked", "Undocked", "SupercruiseEntry",
     "SupercruiseExit", "Touchdown", "Liftoff", "Rank", "Progress", "Loadout",
-    "Outfitting", "ShipyardBuy", "ShipyardSwap", "ModuleBuy", "ModuleSell",
+    "Outfitting", "ShipyardBuy", "ShipyardSwap", "ShipyardSell",
+    "ModuleBuy", "ModuleSell", "ModuleRetrieve", "ModuleStore",
     "MarketBuy", "MarketSell", "MissionCompleted", "RankUp", "Promotion",
 }
 
@@ -184,6 +185,66 @@ def get_history(limit: int = 25, journal_dir: Path | str | None = None) -> dict[
                 d[k] = ev[k]
         slim.append(d)
     return {"found": True, "journal_dir": str(jdir), "events": slim, "count": len(slim)}
+
+
+def get_ship_purchase_history(journal_dir: Path | str | None = None,
+                              ship_query: str | None = None) -> dict[str, Any]:
+    """Your actual ship purchase history from journal events (ShipyardBuy/ShipyardSwap).
+
+    Returns your real purchase prices, stations, systems, and timestamps.
+    Useful for comparing current market prices vs what you actually paid.
+    """
+    jdir = Path(journal_dir) if journal_dir else resolve_journal_dir()
+    if not jdir.exists():
+        return {"found": False, "journal_dir": str(jdir)}
+    purchases: list[dict[str, Any]] = []
+    for ev in _iter_events(jdir):
+        name = ev.get("event")
+        if name in ("ShipyardBuy", "ShipyardSwap", "ShipyardSell"):
+            ship = ev.get("ShipType") or ev.get("Ship") or ev.get("ShipType_Localised")
+            if ship_query and ship_query.strip().lower() not in str(ship).lower():
+                continue
+            purchases.append({
+                "event": name,
+                "timestamp": ev.get("timestamp"),
+                "ship": ship,
+                "ship_localised": ev.get("ShipType_Localised"),
+                "price": ev.get("Price") or ev.get("SellPrice") or ev.get("Cost"),
+                "system": ev.get("StarSystem"),
+                "station": ev.get("StationName"),
+                "market_id": ev.get("MarketID"),
+            })
+    return {"found": True, "journal_dir": str(jdir), "count": len(purchases), "purchases": purchases}
+
+
+def get_module_purchase_history(journal_dir: Path | str | None = None,
+                                module_query: str | None = None) -> dict[str, Any]:
+    """Your actual module purchase history from journal events (ModuleBuy/ModuleSell/ModuleRetrieve).
+
+    Returns real purchase prices, stations, systems, timestamps — useful for
+    comparing current outfitting prices vs what you actually paid.
+    """
+    jdir = Path(journal_dir) if journal_dir else resolve_journal_dir()
+    if not jdir.exists():
+        return {"found": False, "journal_dir": str(jdir)}
+    purchases: list[dict[str, Any]] = []
+    for ev in _iter_events(jdir):
+        name = ev.get("event")
+        if name in ("ModuleBuy", "ModuleSell", "ModuleRetrieve", "ModuleStore"):
+            module = ev.get("Module") or ev.get("Item") or ev.get("Module_Localised")
+            if module_query and module_query.strip().lower() not in str(module).lower():
+                continue
+            purchases.append({
+                "event": name,
+                "timestamp": ev.get("timestamp"),
+                "module": module,
+                "module_localised": ev.get("Module_Localised"),
+                "price": ev.get("Price") or ev.get("BuyPrice") or ev.get("SellPrice") or ev.get("Cost"),
+                "system": ev.get("StarSystem"),
+                "station": ev.get("StationName"),
+                "market_id": ev.get("MarketID"),
+            })
+    return {"found": True, "journal_dir": str(jdir), "count": len(purchases), "purchases": purchases}
 
 
 CARGO_RACK_T_BY_CLASS = {1: 2, 2: 4, 3: 8, 4: 16, 5: 32, 6: 64, 7: 128, 8: 256}

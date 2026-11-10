@@ -53,6 +53,36 @@ def get_journal_history(limit: int = 25, journal_dir: str | None = None) -> dict
     return journal_p.get_history(limit=limit, journal_dir=journal_dir)
 
 
+@mcp.tool()
+def get_ship_purchase_history(ship_query: str | None = None,
+                              journal_dir: str | None = None) -> dict[str, Any]:
+    """Your actual ship purchase history from journal events (ShipyardBuy/ShipyardSell).
+
+    Returns real purchase prices, stations, systems, timestamps — useful for
+    comparing current market prices vs what you actually paid, spotting discounts.
+    """
+    try:
+        return {"ok": True, **journal_p.get_ship_purchase_history(
+            journal_dir, ship_query)}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def get_module_purchase_history(module_query: str | None = None,
+                                journal_dir: str | None = None) -> dict[str, Any]:
+    """Your module purchase history from journal events (ModuleBuy/ModuleSell/ModuleRetrieve).
+
+    Returns real purchase prices, stations, systems, timestamps — useful for
+    comparing current outfitting prices vs what you actually paid.
+    """
+    try:
+        return {"ok": True, **journal_p.get_module_purchase_history(
+            journal_dir, module_query)}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
 # ---- EDSM ----
 @mcp.tool()
 def edsm_sphere_systems(system_name: str | None = None, x: float | None = None,
@@ -543,16 +573,28 @@ def find_module(module_query: str, system_name: str | None = None,
 def find_ship(ship_query: str, system_name: str | None = None,
               x: float | None = None, y: float | None = None,
               z: float | None = None, max_results: int = 10,
-              journal_dir: str | None = None) -> dict[str, Any]:
-    """Stations selling a ship near you (live Spansh shipyard lists)."""
+              pages: int = 4, journal_dir: str | None = None) -> dict[str, Any]:
+    """Stations selling a ship near you (live Spansh shipyard lists).
+
+    Scans `pages` x 100 nearest stations (default 4, max 10): Spansh shipyard
+    snapshots are sparse, so one page misses stock. Each hit carries a
+    `price_note` reminding you to verify the price in-game — ship discounts
+    are time-limited and not exposed in Spansh public snapshots.
+    """
     try:
         _, ref = _ref_coords(system_name, x, y, z, journal_dir)
-        payload = spansh_p.search_stations(
-            filters={}, sorts=[{"distance": {"direction": "asc", "distance": ref}}],
-            page=1, size=100)
-        hits = trade_logic.match_ship(payload.get("results", []), ship_query)
+        sorts = [{"distance": {"direction": "asc", "distance": ref}}]
+        seen: dict[Any, dict[str, Any]] = {}
+        for page in range(1, min(max(pages, 1), 10) + 1):
+            payload = spansh_p.search_stations(
+                filters={}, sorts=sorts, page=page, size=100)
+            for r in payload.get("results", []) or []:
+                seen[r.get("id", (r.get("name"), r.get("system_name")))] = r
+        hits = trade_logic.match_ship(list(seen.values()), ship_query)
         return {"ok": True, "query": ship_query, "ref": ref,
-                "count": len(hits), "stations": hits[:max_results]}
+                "stations_scanned": len(seen),
+                "count": len(hits), "stations": hits[:max_results],
+                "price_note": "Verify ship price in-game — discounts are often time-limited and not reflected in Spansh snapshots."}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
 
